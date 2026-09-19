@@ -179,6 +179,20 @@ test('plan varies across the 4 weeks (non-repeating genre rotation)', () => {
   assert.equal(new Set(friGenres).size, 4, 'Fri genres are non-repeating');
 });
 
+test('title strips commas from a comma-bearing theme', () => {
+  const plan = generateMonthlyPlan({ theme: 'a, b', startWednesday: FIXED_WED });
+  for (const t of plan.tracks) {
+    assert.ok(!t.title.includes('a, b'), 'verbatim comma theme must not appear in title');
+    assert.ok(!t.title.includes(','), 'title must not contain a comma introduced by the theme');
+    assert.ok(t.title.includes('a b'), 'title should contain the collapsed "a b" form');
+  }
+  // A comma-only theme must not leak stray commas into the title either.
+  const commaOnly = generateMonthlyPlan({ theme: ',,,', startWednesday: FIXED_WED });
+  for (const t of commaOnly.tracks) {
+    assert.ok(!t.title.includes(','), 'comma-only theme must not leak commas into title');
+  }
+});
+
 test('formatCopyAllSettings includes Mood and Lyrics lines', () => {
   const plan = generateMonthlyPlan({ theme: 'Test', startWednesday: FIXED_WED });
   const main = plan.tracks.find((t) => t.type === 'main');

@@ -365,14 +365,40 @@ function setPlan(plan, { persist = true } = {}) {
   render();
 }
 
-/** Minimal shape validation for imported plans. */
+/**
+ * Shape validation for imported plans. Requires every field the card UI
+ * actually renders so a partial JSON cannot import into blank/broken cards.
+ * Fully defensive: never throws, returns a boolean.
+ */
+function isValidTrack(t) {
+  if (!t || typeof t !== 'object') return false;
+  const isStr = (v) => typeof v === 'string';
+  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
+  return (
+    isStr(t.id) &&
+    isStr(t.title) &&
+    (t.type === 'main' || t.type === 'shorts') &&
+    isNum(t.week) &&
+    isStr(t.day) &&
+    isStr(t.stylePrompt) &&
+    isStr(t.excludePrompt) &&
+    isStr(t.mood) &&
+    isStr(t.lyricsGuide) &&
+    isStr(t.vocalGender) &&
+    isNum(t.weirdness) &&
+    isNum(t.styleInfluence) &&
+    isStr(t.status) &&
+    isStr(t.releaseDate)
+  );
+}
+
 function isValidPlan(plan) {
   return (
     plan &&
     typeof plan === 'object' &&
     Array.isArray(plan.tracks) &&
     plan.tracks.length > 0 &&
-    plan.tracks.every((t) => t && typeof t.id === 'string' && typeof t.title === 'string')
+    plan.tracks.every(isValidTrack)
   );
 }
 

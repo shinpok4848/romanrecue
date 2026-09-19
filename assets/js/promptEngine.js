@@ -222,7 +222,10 @@ export function buildLyricsGuide(preset, theme, variant) {
  * "<theme> <genre>[ Shorts]" descriptor in parentheses.
  */
 function buildTitle(theme, mood, genre, variant) {
-  const cleanTheme = String(theme || '').replace(/\s+/g, ' ').trim();
+  // Route the theme through the same comma-stripping/whitespace-collapsing
+  // sanitization the other prompt fields use, so a comma-bearing theme cannot
+  // leak literal commas into the bilingual title.
+  const cleanTheme = sanitizeThemeCue(theme);
   const moodLabel = mood === 'emotional' ? '감성' : '에너지';
   const krSuffix = variant === 'shorts' ? ' 숏츠' : '';
   const enSuffix = variant === 'shorts' ? ' Shorts' : '';
