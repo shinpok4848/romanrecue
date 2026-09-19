@@ -1,0 +1,10 @@
+{
+  "name": "sunoflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SunoFlow: a build-free, dependency-free static Suno v6 music + YouTube monthly release planner. No bundler, no install step; open index.html or serve the folder.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

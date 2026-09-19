@@ -1,0 +1,553 @@
+/* SunoFlow — hand-written dark "audio workstation / DAW" theme.
+ * No @import, no remote fonts. System font stack only so it works offline,
+ * via file://, and on GitHub Pages with zero network requests. */
+
+:root {
+  --bg: #0d0f13;
+  --surface: #14171d;
+  --surface-2: #1b1f27;
+  --surface-3: #232833;
+  --border: #2b313d;
+  --text: #e6e9ef;
+  --text-muted: #9aa3b2;
+  --text-dim: #6c7484;
+  --accent: #ff8a3d;
+  --accent-strong: #ff6a00;
+  --accent-soft: rgba(255, 138, 61, 0.15);
+  --focus: #6db3ff;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+
+  /* Status colors */
+  --status-planned: #7f8794;
+  --status-generated: #3d9bff;
+  --status-published: #38c172;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Focus visibility (accessibility) --- */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Header / generate bar --- */
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-header__logo {
+  font-size: 30px;
+}
+
+.app-header__title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+}
+
+.app-header__tagline {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.generate-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.generate-bar__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.generate-bar__input {
+  min-width: 240px;
+  padding: 10px 12px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+.generate-bar__input::placeholder {
+  color: var(--text-dim);
+}
+
+/* --- Buttons --- */
+.btn {
+  padding: 9px 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.btn:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--accent {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #1a0d00;
+  font-weight: 600;
+}
+
+.btn--accent:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn--filter.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn--tiny {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+/* --- Controls row --- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.controls__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- Workspace layout --- */
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  padding: 22px 24px 48px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.panel__heading {
+  margin: 0 0 14px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+/* --- Calendar / timeline --- */
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.calendar__week {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.calendar__week-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.calendar__slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  border-left: 3px solid var(--border);
+  font-size: 12px;
+}
+
+.calendar__slot:last-child {
+  margin-bottom: 0;
+}
+
+.calendar__slot--main {
+  border-left-color: var(--accent);
+}
+
+.calendar__slot--shorts {
+  border-left-color: var(--status-generated);
+}
+
+.calendar__slot-day {
+  font-weight: 600;
+  min-width: 30px;
+}
+
+.calendar__slot-type {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.calendar__slot-date {
+  margin-left: auto;
+  font-family: var(--mono);
+  color: var(--text-muted);
+}
+
+/* --- Track grid + cards --- */
+.track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card__type {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.card__type--main {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.card__type--shorts {
+  color: var(--status-generated);
+  border-color: var(--status-generated);
+}
+
+.card__title {
+  margin: 4px 0 0;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+/* --- Status pill / toggle --- */
+.status-toggle {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.status-toggle[data-status="Planned"] {
+  color: var(--status-planned);
+  border-color: var(--status-planned);
+}
+
+.status-toggle[data-status="Generated"] {
+  color: var(--status-generated);
+  border-color: var(--status-generated);
+  background: rgba(61, 155, 255, 0.12);
+}
+
+.status-toggle[data-status="Published"] {
+  color: var(--status-published);
+  border-color: var(--status-published);
+  background: rgba(56, 193, 114, 0.12);
+}
+
+/* --- Field blocks --- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.field__value {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.field__value--mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.card__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.param-chip {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.param-chip strong {
+  color: var(--text);
+}
+
+.hook-guide {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface);
+}
+
+.hook-guide__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--status-generated);
+  margin: 0 0 6px;
+}
+
+.hook-guide dl {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.hook-guide dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.hook-guide dd {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* --- Empty state --- */
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text-muted);
+}
+
+.empty-state__title {
+  font-size: 18px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.empty-state__hint {
+  margin: 0 auto;
+  max-width: 460px;
+  font-size: 14px;
+}
+
+/* --- Toast --- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--surface-3);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 50;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast--error {
+  border-color: #ff5d5d;
+}
+
+/* --- Responsive --- */
+@media (max-width: 900px) {
+  .calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header,
+  .controls,
+  .workspace {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .generate-bar {
+    width: 100%;
+  }
+  .generate-bar__input {
+    flex: 1;
+    min-width: 0;
+  }
+  .calendar {
+    grid-template-columns: 1fr;
+  }
+  .track-grid {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
