@@ -1,126 +1,89 @@
 // promptEngine.js
-//
-// Deterministic Suno v6 prompt engine. Pure logic, NO DOM access — importable
-// in node:test. Given the same {theme, startWednesday, seed} it always returns
-// an identical monthly plan.
-//
-// The style prompt is assembled to match the user's ground-truth examples:
-//   "K-Pop <genre> at <BPM> BPM in <Key>, <productionPhrase>,
-//    <instruments joined>, <one vocalCharacterization>, <dynamicCurve>,
-//    <finishingTags joined>"
-// The theme is woven in as a single concise cue that never breaks the comma
-// structure. Each track also emits a dedicated v6 Mood string and Lyrics
-// guidance (shorts get a 15-30s highlight hook idea).
+// Pure SunoFlow v2 package generator. It combines a canonical structure,
+// curated bilingual concept, full Korean lyrics, v6 prompt fields, parameters,
+// producer notes, and a parent-derived Shorts package with no DOM or network.
 
 import { DEFAULT_EXCLUDE, EMOTIONAL, ENERGETIC } from './genrePresets.js';
 import { buildScheduleDates, formatISODate, getNextWednesday } from './schedule.js';
+import { buildTrackConcept, sanitizeThemeCue } from './conceptPalettes.js';
+import { getStructureProfile, formatStructure } from './structureProfiles.js';
+import { buildFullLyrics, buildShortLyrics } from './lyricsEngine.js';
+import {
+  buildRotation,
+  createNamedRng,
+  intInRange,
+  mulberry32,
+  normalizeSeed,
+  pick,
+} from './seededRandom.js';
 
-/** Default deterministic seed used when the caller omits one. */
 export const DEFAULT_SEED = 20240101;
+export const ENGINE_VERSION = '2.0.0';
+export const SCHEMA_VERSION = 2;
 
-// ---------------------------------------------------------------------------
-// PRNG + small helpers
-// ---------------------------------------------------------------------------
+// Compatibility exports used by existing integrations and tests.
+export { intInRange, mulberry32, pick, sanitizeThemeCue };
 
-/**
- * Deterministic 32-bit PRNG (mulberry32). Returns a function producing floats
- * in [0, 1).
- * @param {number} seed
- * @returns {() => number}
- */
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function next() {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
- * Pick an integer in [min, max] inclusive from a PRNG draw.
- * @param {() => number} rng
- * @param {number} min
- * @param {number} max
- * @returns {number}
- */
-export function intInRange(rng, min, max) {
-  const lo = Math.min(min, max);
-  const hi = Math.max(min, max);
-  return lo + Math.floor(rng() * (hi - lo + 1));
-}
-
-/**
- * Pick one element of an array from a PRNG draw.
- * @template T
- * @param {() => number} rng
- * @param {T[]} arr
- * @returns {T}
- */
-export function pick(rng, arr) {
-  if (!Array.isArray(arr) || arr.length === 0) return undefined;
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-/** Clamp a number into the 0-100 range. */
 function clampPercent(value) {
   return Math.max(0, Math.min(100, value));
 }
 
-/**
- * Collapse whitespace and strip commas from a free-text theme so it can be
- * woven into the comma-joined style prompt without spawning stray tags.
- */
-function sanitizeThemeCue(theme) {
-  return String(theme || '')
-    .replace(/,/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/** Slugify a genre label into a hashtag-safe token. */
-function genreHashtag(genre) {
-  return String(genre).replace(/[^a-zA-Z0-9]+/g, '');
-}
-
-/**
- * Seeded Fisher-Yates rotation of pool indices across 4 weeks. When the pool
- * has >= 4 entries there are no repeats within the month.
- * @param {() => number} rng
- * @param {number} poolSize
- * @returns {number[]} length-4 array of pool indices
- */
-function buildRotation(rng, poolSize) {
-  const indices = Array.from({ length: poolSize }, (_, i) => i);
-  for (let i = indices.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
+function uniqueTokens(values) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of values) {
+    const token = String(raw ?? '').replace(/\s+/g, ' ').trim();
+    const identity = token.toLocaleLowerCase('en-US');
+    if (token && !seen.has(identity)) {
+      seen.add(identity);
+      result.push(token);
+    }
   }
-  const rotation = [];
-  for (let week = 0; week < 4; week += 1) {
-    rotation.push(indices[week % indices.length]);
-  }
-  return rotation;
+  return result;
 }
 
-// ---------------------------------------------------------------------------
-// Prompt field builders
-// ---------------------------------------------------------------------------
+function inferVocalGender(phrase, fallback = 'Female') {
+  const normalized = String(phrase ?? '').toLocaleLowerCase('en-US');
+  if (normalized.includes('duet') || (normalized.includes('female') && normalized.includes('male'))) return 'Duet';
+  if (normalized.includes('female')) return 'Female';
+  if (normalized.includes('male')) return 'Male';
+  return fallback;
+}
+
+function vocalChoicesFor(preset) {
+  if (Array.isArray(preset.vocalOptions) && preset.vocalOptions.length > 0) {
+    return preset.vocalOptions;
+  }
+  return (preset.vocalCharacterizations || []).map((phrase) => ({
+    phrase,
+    gender: inferVocalGender(phrase, preset.vocalGender),
+  }));
+}
+
+function conceptCueFrom(value) {
+  if (value && typeof value === 'object') return value;
+  const userThemeCue = sanitizeThemeCue(value);
+  return {
+    englishProductionCue: userThemeCue ? `production colored by ${userThemeCue}` : '',
+    moodKeywords: userThemeCue ? [`${userThemeCue} atmosphere`] : [],
+    userThemeCue,
+  };
+}
 
 /**
- * Assemble the ground-truth style prompt as a single comma-joined line.
- * @param {object} preset
- * @param {string} theme
- * @param {() => number} rng
- * @returns {{stylePrompt:string, bpm:number, key:string, vocalPhrase:string}}
+ * Assemble the proven v6 style spine and return every structured selection.
+ * @returns {{stylePrompt:string,bpm:number,key:string,vocalPhrase:string,vocalGender:string}}
  */
-export function buildStylePrompt(preset, theme, rng) {
+export function buildStylePrompt(preset, themeOrConcept, rng = mulberry32(DEFAULT_SEED)) {
+  const concept = conceptCueFrom(themeOrConcept);
   const bpm = intInRange(rng, preset.bpmRange[0], preset.bpmRange[1]);
   const key = pick(rng, preset.keys);
-  const vocalPhrase = pick(rng, preset.vocalCharacterizations);
-  const themeCue = sanitizeThemeCue(theme);
+  const vocalOption = pick(rng, vocalChoicesFor(preset)) || {
+    phrase: 'The lead vocal is mixed up front with natural detail',
+    gender: preset.vocalGender || 'Female',
+  };
+  const vocalPhrase = vocalOption.phrase;
+  const vocalGender = vocalOption.gender || inferVocalGender(vocalPhrase, preset.vocalGender);
 
   const segments = [
     `K-Pop ${preset.genre} at ${bpm} BPM in ${key}`,
@@ -129,301 +92,311 @@ export function buildStylePrompt(preset, theme, rng) {
     vocalPhrase,
     preset.dynamicCurve,
     preset.finishingTags.join(', '),
+    concept.englishProductionCue ? `curated concept cue: ${concept.englishProductionCue}` : '',
   ];
 
-  // Weave the theme as one concise trailing cue so it never breaks structure.
-  if (themeCue) {
-    segments.push(`inspired by ${themeCue}`);
-  }
-
-  const stylePrompt = segments
-    .map((s) => String(s).replace(/\s+/g, ' ').trim())
-    .filter((s) => s.length > 0)
-    .join(', ');
-
-  return { stylePrompt, bpm, key, vocalPhrase };
+  return {
+    stylePrompt: segments
+      .map((segment) => String(segment ?? '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join(', '),
+    bpm,
+    key,
+    vocalPhrase,
+    vocalGender,
+  };
 }
 
-/**
- * Combine the shared degradation tokens with the preset's genre-contrast
- * excludes into a single comma-joined exclude prompt (deduplicated).
- * @param {object} preset
- * @returns {string}
- */
+/** Shared technical negatives plus preset-specific genre contrasts. */
 export function buildExcludePrompt(preset) {
-  const tokens = [...DEFAULT_EXCLUDE, ...(preset.excludeExtra || [])];
-  const seen = new Set();
-  const unique = [];
-  for (const raw of tokens) {
-    const token = String(raw).replace(/\s+/g, ' ').trim();
-    const keyLower = token.toLowerCase();
-    if (token && !seen.has(keyLower)) {
-      seen.add(keyLower);
-      unique.push(token);
-    }
-  }
-  return unique.join(', ');
+  return uniqueTokens([...DEFAULT_EXCLUDE, ...(preset.excludeExtra || [])]).join(', ');
 }
 
-/**
- * Build the dedicated v6 Mood string from the preset's curated mood words plus
- * a light, deterministic theme flavour. Distinct from the style tag list.
- * @param {object} preset
- * @param {string} theme
- * @param {() => number} rng
- * @returns {string}
- */
-export function buildMood(preset, theme, rng) {
-  const pool = [...preset.moodWords];
-  // Deterministically drop one word for variety across weeks/seeds, keeping
-  // at least three mood keywords.
-  if (pool.length > 3) {
-    const dropIdx = Math.floor(rng() * pool.length);
-    pool.splice(dropIdx, 1);
-  }
-  const themeCue = sanitizeThemeCue(theme);
-  const words = themeCue ? [...pool, `${themeCue} atmosphere`] : pool;
-  return words.join(', ');
+/** Dedicated Suno v6 Mood, intentionally separate from the Style prompt. */
+export function buildMood(preset, themeOrConcept, rng = mulberry32(DEFAULT_SEED)) {
+  const concept = conceptCueFrom(themeOrConcept);
+  const presetWords = [...(preset.moodWords || [])];
+  if (presetWords.length > 4) presetWords.splice(Math.floor(rng() * presetWords.length), 1);
+  return uniqueTokens([...presetWords, ...(concept.moodKeywords || [])]).join(', ');
 }
 
-/**
- * Build section-structured lyric guidance. For shorts, returns a compact
- * 15-30s highlight hook idea instead of the full section breakdown.
- * @param {object} preset
- * @param {string} theme
- * @param {'main'|'shorts'} variant
- * @returns {string}
- */
+/** Legacy helper retained for callers; v2 mains store their full lyrics here. */
 export function buildLyricsGuide(preset, theme, variant) {
-  const themeCue = sanitizeThemeCue(theme) || 'the monthly theme';
+  const cue = sanitizeThemeCue(theme) || '월간 테마';
   if (variant === 'shorts') {
-    return [
-      `15-30s highlight hook: open on the catchiest line of the ${preset.genre} chorus.`,
-      `Keep it to 2-4 punchy lines about "${themeCue}" that loop cleanly for a vertical Short.`,
-      'End on a hook word that invites a rewatch.',
-    ].join(' ');
+    return `15-30s parent-derived hook excerpt for ${cue}; use the exact 2-4 Korean source lines stored in shortsHookGuide.`;
   }
-  const sections = preset.lyricStructure
-    .map((section) => `[${section}]`)
-    .join(' -> ');
-  return [
-    `Theme: ${themeCue}.`,
-    `Suggested section flow: ${sections}.`,
-    'Write the hook first, keep verses conversational, and land the emotional payload in the chorus/bridge.',
-  ].join(' ');
+  return `Theme: ${cue}. Structure: ${formatStructure(getStructureProfile(preset.structureId).sections)}.`;
 }
 
-// ---------------------------------------------------------------------------
-// Titles
-// ---------------------------------------------------------------------------
-
-/**
- * Compose a bilingual (KR / EN) title: a Korean mood label + the English
- * "<theme> <genre>[ Shorts]" descriptor in parentheses.
- */
-function buildTitle(theme, mood, genre, variant) {
-  // Route the theme through the same comma-stripping/whitespace-collapsing
-  // sanitization the other prompt fields use, so a comma-bearing theme cannot
-  // leak literal commas into the bilingual title.
-  const cleanTheme = sanitizeThemeCue(theme);
-  const moodLabel = mood === 'emotional' ? '감성' : '에너지';
-  const krSuffix = variant === 'shorts' ? ' 숏츠' : '';
-  const enSuffix = variant === 'shorts' ? ' Shorts' : '';
-  const kr = `${cleanTheme} ${moodLabel}${krSuffix}`.trim();
-  const en = `${cleanTheme} ${genre}${enSuffix}`.trim();
-  return `${kr} (${en})`;
+function genreHashtag(genre) {
+  return String(genre ?? '').replace(/[^a-zA-Z0-9]+/g, '') || 'KPop';
 }
 
-// ---------------------------------------------------------------------------
-// Track builders
-// ---------------------------------------------------------------------------
+function cloneConcept(concept) {
+  return {
+    ...concept,
+    koreanKeywords: [...(concept.koreanKeywords || [])],
+    moodKeywords: [...(concept.moodKeywords || [])],
+  };
+}
 
-/** Build a full MAIN track from a preset. */
-function buildMainTrack(preset, mood, theme, rng, base) {
-  const { stylePrompt } = buildStylePrompt(preset, theme, rng);
-  const weirdness = clampPercent(intInRange(rng, preset.weirdnessRange[0], preset.weirdnessRange[1]));
-  const styleInfluence = clampPercent(
-    intInRange(rng, preset.styleInfluenceRange[0], preset.styleInfluenceRange[1]),
+function buildMainTrack({ preset, lane, theme, seed, ordinal, base }) {
+  const concept = buildTrackConcept({ theme, seed, ordinal, lane });
+  const profile = getStructureProfile(preset.structureId);
+  const style = buildStylePrompt(preset, concept, createNamedRng(seed, 'style', base.id));
+  const parameterRng = createNamedRng(seed, 'parameters', base.id);
+  const weirdness = clampPercent(
+    intInRange(parameterRng, preset.weirdnessRange[0], preset.weirdnessRange[1]),
   );
+  const styleInfluence = clampPercent(
+    intInRange(parameterRng, preset.styleInfluenceRange[0], preset.styleInfluenceRange[1]),
+  );
+  const mood = buildMood(preset, concept, createNamedRng(seed, 'mood', base.id));
+  const lyricPackage = buildFullLyrics({
+    profile,
+    concept,
+    vocalGender: style.vocalGender,
+    rng: createNamedRng(seed, 'lyrics', base.id),
+  });
+
   return {
     ...base,
     type: 'main',
     linkedTrackId: null,
+    lane,
+    presetId: preset.id,
+    structureId: profile.id,
+    structureName: `${profile.nameKo} / ${profile.nameEn}`,
     genre: preset.genre,
-    title: buildTitle(theme, mood, preset.genre, 'main'),
-    stylePrompt,
+    title: concept.title,
+    titleKo: concept.titleKo,
+    titleEn: concept.titleEn,
+    concept,
+    bpm: style.bpm,
+    key: style.key,
+    vocalPhrase: style.vocalPhrase,
+    vocalGender: style.vocalGender,
+    stylePrompt: style.stylePrompt,
     excludePrompt: buildExcludePrompt(preset),
-    mood: buildMood(preset, theme, rng),
-    lyricsGuide: buildLyricsGuide(preset, theme, 'main'),
-    vocalGender: preset.vocalGender,
+    mood,
+    structure: [...profile.sections],
+    structureRationale: profile.rationale,
+    producerPrescription: profile.producerPrescription,
+    energyArc: profile.rules.energyArc,
+    strongestHookTag: profile.strongestHookTag,
+    lyricSections: lyricPackage.lyricSections,
+    lyrics: lyricPackage.lyrics,
+    // Main v2 compatibility alias: this is full Korean copy, not guidance.
+    lyricsGuide: lyricPackage.lyrics,
     weirdness,
     styleInfluence,
     shortsHookGuide: null,
   };
 }
 
-/**
- * Derive a SHORTS track from a same-week parent MAIN track. Genre/tempo
- * continuity is explicit: the short reuses the parent's genre and BPM.
- */
-function buildShortsTrack(preset, parent, mood, theme, base) {
-  const parentBpmMatch = parent.stylePrompt.match(/at (\d+) BPM/);
-  const bpm = parentBpmMatch ? Number(parentBpmMatch[1]) : preset.bpmRange[0];
-  const keyMatch = parent.stylePrompt.match(/ in ([^,]+),/);
-  const key = keyMatch ? keyMatch[1].trim() : preset.keys[0];
+function buildShortStylePrompt(preset, parent) {
+  return [
+    `K-Pop ${parent.genre} at ${parent.bpm} BPM in ${parent.key}`,
+    preset.productionPhrase,
+    preset.instruments.join(', '),
+    parent.vocalPhrase,
+    `hook-first vertical edit sourced from the parent ${parent.strongestHookTag}`,
+    preset.finishingTags.join(', '),
+    `curated concept cue: ${parent.concept.englishProductionCue}`,
+  ]
+    .map((segment) => String(segment ?? '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join(', ');
+}
 
-  const isEmotional = mood === 'emotional';
-  const highlightSection = isEmotional
-    ? '15-30s chorus/bridge "killing part" — the most emotional vocal hook'
-    : '15-30s main drop section — the hardest-hitting groove';
+/** Derive a Short without random draws or presentation-text parsing. */
+function buildShortsTrack({ preset, parent, lane, base }) {
+  const shortLyrics = buildShortLyrics(parent);
+  const isEmotional = lane === 'emotional';
+  const highlightSection = `15-30s ${shortLyrics.sourceSection} killing part — exact parent lyric excerpt`;
   const videoHookIdea = isEmotional
-    ? '9:16 vertical, cinematic slow-motion lyric close-up with soft bokeh'
-    : '9:16 vertical, fast-cut beat-synced visuals landing on the drop';
-  const captionHashtags = [
-    genreHashtag(preset.genre),
+    ? `9:16 close-up moving from ${parent.concept.scene} toward a calm emotional reveal`
+    : `9:16 beat-synced motion built around ${parent.concept.scene} and the first hook hit`;
+  const captionHashtags = uniqueTokens([
+    genreHashtag(parent.genre),
     'Shorts',
     'SunoAI',
     isEmotional ? 'EmotionalMusic' : 'ViralBeat',
-  ];
-
-  const stylePrompt = [
-    `K-Pop ${preset.genre} at ${bpm} BPM in ${key}`,
-    preset.productionPhrase,
-    `${isEmotional ? 'emotional hook edit' : 'drop-focused edit'} for a vertical Short`,
-    preset.finishingTags.join(', '),
-  ]
-    .map((s) => String(s).replace(/\s+/g, ' ').trim())
-    .join(', ');
+  ]);
 
   return {
     ...base,
     type: 'shorts',
     linkedTrackId: parent.id,
-    genre: preset.genre,
-    title: buildTitle(theme, mood, preset.genre, 'shorts'),
-    stylePrompt,
+    lane,
+    presetId: parent.presetId,
+    structureId: parent.structureId,
+    structureName: parent.structureName,
+    genre: parent.genre,
+    title: `${parent.title} · Shorts`,
+    titleKo: parent.titleKo,
+    titleEn: parent.titleEn,
+    concept: cloneConcept(parent.concept),
+    bpm: parent.bpm,
+    key: parent.key,
+    vocalPhrase: parent.vocalPhrase,
+    vocalGender: parent.vocalGender,
+    stylePrompt: buildShortStylePrompt(preset, parent),
     excludePrompt: parent.excludePrompt,
     mood: parent.mood,
-    lyricsGuide: buildLyricsGuide(preset, theme, 'shorts'),
-    vocalGender: parent.vocalGender,
+    structure: shortLyrics.lyricSections.map((section) => section.section),
+    parentStructure: [...parent.structure],
+    structureRationale: `부모 곡의 마지막 ${shortLyrics.sourceSection}에서 제목 훅이 포함된 연속 가사만 추출해 즉시 몰입시키는 숏폼 구조다.`,
+    producerPrescription: `부모 곡의 ${parent.bpm} BPM, ${parent.key}, 보컬, Mood, Exclude를 그대로 유지하고 15-30초 안에 훅부터 시작해 여백 없이 [End]로 닫는다.`,
+    energyArc: 'immediate parent hook peak -> concise clean ending',
+    strongestHookTag: shortLyrics.sourceSection,
+    lyricSections: shortLyrics.lyricSections,
+    lyrics: shortLyrics.lyrics,
+    // Compatibility field deliberately retains the literal duration token.
+    lyricsGuide: `15-30s exact excerpt from parent ${shortLyrics.sourceSection}:\n${shortLyrics.lyrics}`,
     weirdness: parent.weirdness,
     styleInfluence: parent.styleInfluence,
-    shortsHookGuide: { highlightSection, videoHookIdea, captionHashtags },
+    shortsHookGuide: {
+      highlightSection,
+      sourceSection: shortLyrics.sourceSection,
+      sourceTrackId: parent.id,
+      excerpt: shortLyrics.excerpt,
+      excerptLines: [...shortLyrics.excerptLines],
+      videoHookIdea,
+      captionHashtags,
+    },
   };
 }
 
-// ---------------------------------------------------------------------------
-// Monthly plan
-// ---------------------------------------------------------------------------
-
 /**
- * Generate a deterministic monthly plan: 16 tracks over 4 weeks
- * (8 main + 8 shorts). Wednesday mains from EMOTIONAL, Friday mains from
- * ENERGETIC; Thu shorts derive from that week's Wed main, Sat shorts from that
- * week's Fri main (same genre + tempo continuity).
- *
- * @param {{theme?:string, startWednesday?:Date, seed?:number}} [input]
- * @returns {{id:string, theme:string, seed:number, startDate:string, createdAt:string, tracks:object[]}}
+ * Generate exactly four weeks: eight full v2 packages and eight linked Shorts.
+ * Every random concern has a named stream, and every Short is a pure projection
+ * of its parent.
  */
 export function generateMonthlyPlan(input = {}) {
-  const seed = Number.isFinite(input.seed) ? input.seed : DEFAULT_SEED;
+  const seed = normalizeSeed(input.seed, DEFAULT_SEED);
   const theme = input.theme != null ? String(input.theme) : '';
-  const rng = mulberry32(seed);
-
   const startWednesday = getNextWednesday(input.startWednesday ?? new Date());
   const schedule = buildScheduleDates(startWednesday);
+  const emotionalRotation = buildRotation(
+    createNamedRng(seed, 'genre-rotation', 'emotional'),
+    EMOTIONAL.length,
+  );
+  const energeticRotation = buildRotation(
+    createNamedRng(seed, 'genre-rotation', 'energetic'),
+    ENERGETIC.length,
+  );
 
-  const emotionalRotation = buildRotation(rng, EMOTIONAL.length);
-  const energeticRotation = buildRotation(rng, ENERGETIC.length);
-
-  // First pass: build main tracks so shorts can link to their parents.
-  const mainByWeek = {}; // { [week]: { Wed:track, Fri:track } }
-  const presetByWeek = {}; // { [week]: { Wed:preset, Fri:preset } }
+  const mainByWeek = {};
+  const presetByWeek = {};
   const tracksById = {};
+  let mainOrdinal = 0;
 
   for (const entry of schedule) {
     if (entry.type !== 'main') continue;
-    const weekIdx = entry.week - 1;
-    const isWed = entry.day === 'Wed';
-    const preset = isWed
-      ? EMOTIONAL[emotionalRotation[weekIdx]]
-      : ENERGETIC[energeticRotation[weekIdx]];
-    const mood = isWed ? 'emotional' : 'energetic';
-    const id = `w${entry.week}-${entry.day.toLowerCase()}-main`;
-    const base = {
-      id,
-      week: entry.week,
-      day: entry.day,
-      releaseDate: formatISODate(entry.date),
-      status: 'Planned',
-    };
-    const track = buildMainTrack(preset, mood, theme, rng, base);
+    const weekIndex = entry.week - 1;
+    const isWednesday = entry.day === 'Wed';
+    const preset = isWednesday
+      ? EMOTIONAL[emotionalRotation[weekIndex]]
+      : ENERGETIC[energeticRotation[weekIndex]];
+    const lane = isWednesday ? 'emotional' : 'energetic';
+    const id = `w${entry.week}-${entry.day.toLocaleLowerCase('en-US')}-main`;
+    const track = buildMainTrack({
+      preset,
+      lane,
+      theme,
+      seed,
+      ordinal: mainOrdinal,
+      base: {
+        id,
+        week: entry.week,
+        day: entry.day,
+        releaseDate: formatISODate(entry.date),
+        status: 'Planned',
+      },
+    });
+    mainOrdinal += 1;
     tracksById[id] = track;
-    if (!mainByWeek[entry.week]) mainByWeek[entry.week] = {};
-    if (!presetByWeek[entry.week]) presetByWeek[entry.week] = {};
+    mainByWeek[entry.week] ||= {};
+    presetByWeek[entry.week] ||= {};
     mainByWeek[entry.week][entry.day] = track;
     presetByWeek[entry.week][entry.day] = preset;
   }
 
-  // Second pass: emit tracks in chronological order, linking shorts to parents.
   const tracks = [];
   for (const entry of schedule) {
     if (entry.type === 'main') {
-      tracks.push(tracksById[`w${entry.week}-${entry.day.toLowerCase()}-main`]);
+      tracks.push(tracksById[`w${entry.week}-${entry.day.toLocaleLowerCase('en-US')}-main`]);
       continue;
     }
-    const isThu = entry.day === 'Thu';
-    const parentDay = isThu ? 'Wed' : 'Fri';
+    const parentDay = entry.day === 'Thu' ? 'Wed' : 'Fri';
     const parent = mainByWeek[entry.week][parentDay];
     const preset = presetByWeek[entry.week][parentDay];
-    const mood = isThu ? 'emotional' : 'energetic';
-    const base = {
-      id: `w${entry.week}-${entry.day.toLowerCase()}-shorts`,
-      week: entry.week,
-      day: entry.day,
-      releaseDate: formatISODate(entry.date),
-      status: 'Planned',
-    };
-    tracks.push(buildShortsTrack(preset, parent, mood, theme, base));
+    tracks.push(buildShortsTrack({
+      preset,
+      parent,
+      lane: entry.day === 'Thu' ? 'emotional' : 'energetic',
+      base: {
+        id: `w${entry.week}-${entry.day.toLocaleLowerCase('en-US')}-shorts`,
+        week: entry.week,
+        day: entry.day,
+        releaseDate: formatISODate(entry.date),
+        status: 'Planned',
+      },
+    }));
   }
 
   return {
     id: `plan-${seed}-${formatISODate(startWednesday)}`,
+    schemaVersion: SCHEMA_VERSION,
+    engineVersion: ENGINE_VERSION,
+    generatorVersion: ENGINE_VERSION,
     theme,
+    themeCue: sanitizeThemeCue(theme),
     seed,
     startDate: formatISODate(startWednesday),
+    // Stable by design so identical explicit inputs are deeply equal.
     createdAt: new Date(0).toISOString(),
     tracks,
   };
 }
 
-/**
- * Render a Suno-web-ready text block for a track (backs "Copy All Settings").
- * Includes Title / Style / Exclude / Mood / Lyrics / Vocal / Weirdness% /
- * Style Influence%, plus a Hook Guide for shorts.
- * @param {object} track
- * @returns {string}
- */
+/** Complete copy-ready Suno package text with legacy-safe fallbacks. */
 export function formatCopyAllSettings(track) {
+  const lyrics = track.lyrics ?? track.lyricsGuide ?? '';
+  const structure = Array.isArray(track.structure)
+    ? formatStructure(track.structure)
+    : String(track.structure ?? 'Legacy structure not recorded');
   const lines = [
-    `Title: ${track.title}`,
-    `Style: ${track.stylePrompt}`,
-    `Exclude: ${track.excludePrompt}`,
-    `Mood: ${track.mood}`,
-    `Lyrics: ${track.lyricsGuide}`,
-    `Vocal: ${track.vocalGender}`,
-    `Weirdness: ${track.weirdness}%`,
-    `Style Influence: ${track.styleInfluence}%`,
+    `Title: ${track.title ?? ''}`,
+    `Korean Title: ${track.titleKo ?? 'Legacy title only'}`,
+    `English Title: ${track.titleEn ?? 'Legacy title only'}`,
+    `Style: ${track.stylePrompt ?? ''}`,
+    `Exclude: ${track.excludePrompt ?? ''}`,
+    `Mood: ${track.mood ?? ''}`,
+    `Lyrics: ${lyrics}`,
+    `Structure: ${structure}`,
+    `Rationale: ${track.structureRationale ?? 'Legacy plan — not recorded'}`,
+    `Prescription: ${track.producerPrescription ?? 'Legacy plan — not recorded'}`,
+    `Vocal: ${track.vocalGender ?? ''}`,
+    `Vocal Phrase: ${track.vocalPhrase ?? 'Legacy plan — not recorded'}`,
+    `BPM: ${track.bpm ?? 'Legacy plan — embedded in Style'}`,
+    `Key: ${track.key ?? 'Legacy plan — embedded in Style'}`,
+    `Weirdness: ${track.weirdness ?? ''}%`,
+    `Style Influence: ${track.styleInfluence ?? ''}%`,
   ];
 
   if (track.type === 'shorts' && track.shortsHookGuide) {
-    const g = track.shortsHookGuide;
-    const hashtags = (g.captionHashtags || []).map((h) => `#${h}`).join(' ');
+    const guide = track.shortsHookGuide;
+    const hashtags = (guide.captionHashtags || []).map((tag) => `#${tag}`).join(' ');
     lines.push(
       '',
       'Hook Guide:',
-      `  Highlight: ${g.highlightSection}`,
-      `  Video Hook: ${g.videoHookIdea}`,
+      `  Source: ${guide.sourceSection || guide.highlightSection || ''}`,
+      `  Exact Excerpt:\n${guide.excerpt || ''}`,
+      `  Highlight: ${guide.highlightSection || ''}`,
+      `  Video Hook: ${guide.videoHookIdea || ''}`,
       `  Hashtags: ${hashtags}`,
     );
   }

@@ -1,41 +1,25 @@
 // app.js
-//
-// UI layer for SunoFlow. Imports the pure FEAT-001 logic modules and wires them
-// to the DOM. All dynamic text is inserted via textContent / createElement (no
-// innerHTML interpolation) so user theme text and comma-heavy prompts can never
-// break markup or inject HTML. 100% self-contained: no network, no CDN.
+// Browser-only UI for the dependency-free SunoFlow engine. Dynamic content is
+// inserted exclusively with textContent/createTextNode; imported themes and
+// lyrics are never interpreted as HTML.
 
 import { generateMonthlyPlan, formatCopyAllSettings } from './promptEngine.js';
 import {
   toJSON,
   fromJSON,
   toCSV,
-  toMarkdownTable,
+  toMarkdown,
   buildYouTubeDescription,
 } from './exporters.js';
 import { savePlan, loadPlan } from './storage.js';
-
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
+import { inspectPlanSchema, isLegacyPlan, normalizePlan } from './planSchema.js';
+import { formatStructure } from './structureProfiles.js';
 
 const STATUS_CYCLE = ['Planned', 'Generated', 'Published'];
+const FILTER_TYPES = { all: null, main: 'main', shorts: 'shorts' };
+const WEEK_ORDER = ['Wed', 'Thu', 'Fri', 'Sat'];
 
-/** Full track types shown for each filter value. */
-const FILTER_TYPES = {
-  all: null, // null = show everything
-  main: 'main',
-  shorts: 'shorts',
-};
-
-const state = {
-  plan: null,
-  filter: 'all',
-};
-
-// ---------------------------------------------------------------------------
-// DOM references
-// ---------------------------------------------------------------------------
+const state = { plan: null, filter: 'all' };
 
 const els = {
   form: document.getElementById('generate-form'),
@@ -52,282 +36,302 @@ const els = {
   exportMd: document.getElementById('export-md-btn'),
 };
 
-// ---------------------------------------------------------------------------
-// Small DOM helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Create an element with optional class, text, and attributes. Text is always
- * assigned via textContent so it is never parsed as HTML.
- */
 function el(tag, { className, text, attrs } = {}) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text != null) node.textContent = text;
   if (attrs) {
-    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
   }
   return node;
 }
 
-/** Remove all children of a node. */
 function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
 let toastTimer = null;
-
-/** Show a transient toast. `isError` switches to the error styling. */
 function showToast(message, isError = false) {
-  const toast = els.toast;
-  toast.textContent = message;
-  toast.hidden = false;
-  toast.classList.toggle('toast--error', Boolean(isError));
-  // Force reflow so the transition re-triggers on rapid successive calls.
-  void toast.offsetWidth;
-  toast.classList.add('is-visible');
+  els.toast.textContent = message;
+  els.toast.hidden = false;
+  els.toast.classList.toggle('toast--error', Boolean(isError));
+  void els.toast.offsetWidth;
+  els.toast.classList.add('is-visible');
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
-    toast.classList.remove('is-visible');
-    toastTimer = setTimeout(() => {
-      toast.hidden = true;
-    }, 220);
+    els.toast.classList.remove('is-visible');
+    toastTimer = setTimeout(() => { els.toast.hidden = true; }, 220);
   }, 1800);
 }
 
-// ---------------------------------------------------------------------------
-// Clipboard (with graceful fallback)
-// ---------------------------------------------------------------------------
-
-/** Legacy fallback copy for contexts without navigator.clipboard (e.g. file://). */
 function fallbackCopy(text) {
   try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.top = '-1000px';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand && document.execCommand('copy');
-    document.body.removeChild(ta);
-    return Boolean(ok);
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-1000px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand && document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return Boolean(copied);
   } catch {
     return false;
   }
 }
 
-/** Copy text, preferring the async Clipboard API, then a legacy fallback. */
 async function copyText(text, label) {
-  const okMsg = `${label} copied ✓`;
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
-      showToast(okMsg);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(String(text ?? ''));
+      showToast(`${label} 복사 완료 ✓`);
       return;
     }
   } catch {
-    // Fall through to the legacy path below.
+    // Continue to the dependency-free legacy path.
   }
-  if (fallbackCopy(text)) {
-    showToast(okMsg);
-  } else {
-    showToast(`Copy unavailable — select the text manually`, true);
-  }
+  if (fallbackCopy(String(text ?? ''))) showToast(`${label} 복사 완료 ✓`);
+  else showToast('복사할 수 없습니다 — 텍스트를 직접 선택해 주세요', true);
 }
-
-// ---------------------------------------------------------------------------
-// Downloads (Blob + object URL, fully client-side)
-// ---------------------------------------------------------------------------
 
 function downloadFile(filename, content, mime) {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
-  const a = el('a', { attrs: { href: url, download: filename } });
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  // Revoke on the next tick so the download has a chance to start.
+  const anchor = el('a', { attrs: { href: url, download: filename } });
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-/** Build a filesystem-safe base name from the plan theme. */
 function planBaseName() {
-  const theme = (state.plan && state.plan.theme) || 'plan';
+  const theme = state.plan?.theme || 'plan';
   const slug = String(theme)
     .trim()
     .replace(/[^a-zA-Z0-9가-힣]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .toLowerCase();
+    .toLocaleLowerCase('en-US');
   return `sunoflow-${slug || 'plan'}`;
 }
 
-// ---------------------------------------------------------------------------
-// Rendering
-// ---------------------------------------------------------------------------
+let fallbackSeedCounter = 0;
+function freshGenerationSeed() {
+  const buffer = new Uint32Array(1);
+  try {
+    if (globalThis.crypto?.getRandomValues) {
+      globalThis.crypto.getRandomValues(buffer);
+      return buffer[0];
+    }
+  } catch {
+    // Date/performance fallback below is only for older restricted browsers.
+  }
+  fallbackSeedCounter = (fallbackSeedCounter + 1) >>> 0;
+  const highResolution = typeof performance !== 'undefined'
+    ? Math.floor(performance.now() * 1000)
+    : 0;
+  return (Date.now() ^ highResolution ^ fallbackSeedCounter) >>> 0;
+}
 
-const WEEK_ORDER = ['Wed', 'Thu', 'Fri', 'Sat'];
+function daySortIndex(day) {
+  const index = WEEK_ORDER.indexOf(day);
+  return index < 0 ? WEEK_ORDER.length : index;
+}
 
 function renderCalendar() {
   clear(els.calendar);
   if (!state.plan) return;
-
   const byWeek = new Map();
   for (const track of state.plan.tracks) {
     if (!byWeek.has(track.week)) byWeek.set(track.week, []);
     byWeek.get(track.week).push(track);
   }
 
-  const weeks = [...byWeek.keys()].sort((a, b) => a - b);
-  for (const week of weeks) {
-    const weekEl = el('div', { className: 'calendar__week' });
-    weekEl.appendChild(
-      el('h3', { className: 'calendar__week-title', text: `Week ${week}` }),
-    );
-    const tracks = byWeek
-      .get(week)
-      .slice()
-      .sort((a, b) => WEEK_ORDER.indexOf(a.day) - WEEK_ORDER.indexOf(b.day));
+  for (const week of [...byWeek.keys()].sort((a, b) => a - b)) {
+    const weekNode = el('div', { className: 'calendar__week' });
+    weekNode.appendChild(el('h3', { className: 'calendar__week-title', text: `Week ${week}` }));
+    const tracks = byWeek.get(week).slice().sort((a, b) => daySortIndex(a.day) - daySortIndex(b.day));
     for (const track of tracks) {
-      const slot = el('div', {
-        className: `calendar__slot calendar__slot--${track.type}`,
-      });
-      slot.appendChild(
-        el('span', { className: 'calendar__slot-day', text: track.day }),
-      );
-      slot.appendChild(
-        el('span', {
-          className: 'calendar__slot-type',
-          text: track.type === 'main' ? 'Full' : 'Shorts',
-        }),
-      );
-      slot.appendChild(
-        el('span', { className: 'calendar__slot-date', text: track.releaseDate }),
-      );
-      weekEl.appendChild(slot);
+      const slot = el('div', { className: `calendar__slot calendar__slot--${track.type}` });
+      slot.appendChild(el('span', { className: 'calendar__slot-day', text: track.day }));
+      slot.appendChild(el('span', { className: 'calendar__slot-type', text: track.type === 'main' ? 'Full' : 'Shorts' }));
+      slot.appendChild(el('span', { className: 'calendar__slot-date', text: track.releaseDate }));
+      weekNode.appendChild(slot);
     }
-    els.calendar.appendChild(weekEl);
+    els.calendar.appendChild(weekNode);
   }
 }
 
-/** Build one labelled copyable field (mono value block + copy button). */
-function buildCopyField(label, value, copyLabel, track) {
-  const field = el('div', { className: 'field' });
+function buildCopyField(label, value, copyLabel, options = {}) {
+  const text = String(value ?? '');
+  const field = el('section', { className: `field${options.korean ? ' field--korean' : ''}` });
   const head = el('div', { className: 'field__head' });
   head.appendChild(el('span', { className: 'field__label', text: label }));
-  if (copyLabel) {
-    const btn = el('button', {
-      className: 'btn btn--tiny',
-      text: `Copy ${label}`,
-      attrs: { type: 'button' },
-    });
-    btn.addEventListener('click', () => copyText(value, copyLabel));
-    head.appendChild(btn);
-  }
+  const button = el('button', {
+    className: 'btn btn--tiny',
+    text: `Copy ${options.shortLabel || label}`,
+    attrs: { type: 'button', 'aria-label': `${label} 복사` },
+  });
+  button.addEventListener('click', () => copyText(text, copyLabel || label));
+  head.appendChild(button);
   field.appendChild(head);
-  field.appendChild(
-    el('p', { className: 'field__value field__value--mono', text: value }),
-  );
+
+  const valueNode = el(options.multiline ? 'pre' : 'p', {
+    className: `field__value field__value--mono${options.korean ? ' field__value--lyrics' : ''}`,
+    text,
+  });
+  if (options.collapsible) {
+    const details = el('details', { className: 'field__details' });
+    if (options.open) details.open = true;
+    const lineCount = text ? text.split(/\r?\n/).length : 0;
+    details.appendChild(el('summary', {
+      text: options.summary || (lineCount > 1 ? `내용 보기 · ${lineCount} lines` : '내용 보기'),
+    }));
+    details.appendChild(valueNode);
+    field.appendChild(details);
+  } else {
+    field.appendChild(valueNode);
+  }
   return field;
 }
 
 function buildParamChip(label, value) {
   const chip = el('span', { className: 'param-chip' });
   chip.appendChild(el('strong', { text: `${label}: ` }));
-  chip.appendChild(document.createTextNode(String(value)));
+  chip.appendChild(document.createTextNode(String(value ?? '—')));
   return chip;
 }
 
 function buildStatusToggle(track) {
-  const btn = el('button', {
+  const button = el('button', {
     className: 'status-toggle',
     text: track.status,
-    attrs: { type: 'button', 'data-status': track.status, 'aria-label': 'Toggle status' },
+    attrs: {
+      type: 'button',
+      'data-status': track.status,
+      'aria-label': `${track.title} 상태 변경`,
+    },
   });
-  btn.addEventListener('click', () => {
-    const idx = STATUS_CYCLE.indexOf(track.status);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+  button.addEventListener('click', () => {
+    const currentIndex = STATUS_CYCLE.indexOf(track.status);
+    const next = STATUS_CYCLE[(Math.max(currentIndex, 0) + 1) % STATUS_CYCLE.length];
     track.status = next;
-    btn.textContent = next;
-    btn.setAttribute('data-status', next);
+    button.textContent = next;
+    button.setAttribute('data-status', next);
     savePlan(state.plan);
-    showToast(`Status → ${next}`);
+    showToast(`상태 → ${next}`);
   });
-  return btn;
+  return button;
 }
 
 function buildCard(track) {
-  const card = el('article', { className: 'card', attrs: { 'data-type': track.type } });
+  const legacy = track.legacy === true || isLegacyPlan(state.plan);
+  const card = el('article', {
+    className: `card${legacy ? ' card--legacy' : ''}`,
+    attrs: { 'data-type': track.type },
+  });
 
-  // Top row: meta + status.
   const top = el('div', { className: 'card__top' });
-  const metaWrap = el('div');
+  const metaWrap = el('div', { className: 'card__identity' });
   const meta = el('div', { className: 'card__meta' });
-  meta.appendChild(
-    el('span', {
-      className: `card__type card__type--${track.type}`,
-      text: track.type === 'main' ? '본편 · Full' : '숏츠 · Shorts',
-    }),
-  );
+  meta.appendChild(el('span', {
+    className: `card__type card__type--${track.type}`,
+    text: track.type === 'main' ? '본편 · Full' : '숏츠 · Shorts',
+  }));
   meta.appendChild(el('span', { text: `W${track.week} · ${track.day}` }));
   meta.appendChild(el('span', { text: track.releaseDate }));
+  if (legacy) meta.appendChild(el('span', { className: 'legacy-badge', text: 'Legacy v1' }));
   metaWrap.appendChild(meta);
-  metaWrap.appendChild(el('h3', { className: 'card__title', text: track.title }));
+
+  const titleRow = el('div', { className: 'card__title-row' });
+  titleRow.appendChild(el('h3', { className: 'card__title', text: track.title }));
+  const titleCopy = el('button', {
+    className: 'btn btn--tiny',
+    text: 'Copy Title',
+    attrs: { type: 'button', 'aria-label': '제목 복사' },
+  });
+  titleCopy.addEventListener('click', () => copyText(track.title, 'Title'));
+  titleRow.appendChild(titleCopy);
+  metaWrap.appendChild(titleRow);
   top.appendChild(metaWrap);
   top.appendChild(buildStatusToggle(track));
   card.appendChild(top);
 
-  // Prompt fields (each copyable).
-  card.appendChild(buildCopyField('Style', track.stylePrompt, 'Style Prompt', track));
-  card.appendChild(buildCopyField('Exclude', track.excludePrompt, 'Exclude Prompt', track));
-  card.appendChild(buildCopyField('Mood', track.mood, 'Mood', track));
-  card.appendChild(buildCopyField('Lyrics', track.lyricsGuide, 'Lyrics guide', track));
+  if (!legacy && track.concept) {
+    const concept = el('div', { className: 'concept-strip' });
+    concept.appendChild(el('strong', { text: `${track.concept.paletteNameKo || '콘셉트'} · ` }));
+    concept.appendChild(document.createTextNode(`${track.concept.scene} — ${track.concept.emotionalArc}`));
+    card.appendChild(concept);
+  } else if (legacy) {
+    card.appendChild(el('p', {
+      className: 'legacy-note',
+      text: '이 항목은 기존 v1 플랜입니다. 아래 Lyrics는 완성형 한글 가사가 아니라 당시 저장된 영어 가이드입니다.',
+    }));
+  }
 
-  // Parameter chips.
   const params = el('div', { className: 'card__params' });
+  if (!legacy) {
+    params.appendChild(buildParamChip('BPM', track.bpm));
+    params.appendChild(buildParamChip('Key', track.key));
+  }
   params.appendChild(buildParamChip('Vocal', track.vocalGender));
   params.appendChild(buildParamChip('Weirdness', `${track.weirdness}%`));
   params.appendChild(buildParamChip('Style Influence', `${track.styleInfluence}%`));
   card.appendChild(params);
 
-  // Shorts hook guide.
-  if (track.type === 'shorts' && track.shortsHookGuide) {
-    const g = track.shortsHookGuide;
-    const guide = el('div', { className: 'hook-guide' });
-    guide.appendChild(el('p', { className: 'hook-guide__label', text: 'Shorts Hook Guide' }));
-    const dl = el('dl');
-    const addRow = (dt, dd) => {
-      dl.appendChild(el('dt', { text: dt }));
-      dl.appendChild(el('dd', { text: dd }));
-    };
-    addRow('Highlight', g.highlightSection);
-    addRow('Video Hook', g.videoHookIdea);
-    addRow('Hashtags', (g.captionHashtags || []).map((h) => `#${h}`).join(' '));
-    guide.appendChild(dl);
-    card.appendChild(guide);
+  card.appendChild(buildCopyField('Style Prompt', track.stylePrompt, 'Style Prompt', { collapsible: true }));
+  card.appendChild(buildCopyField('Exclude Prompt', track.excludePrompt, 'Exclude Prompt', { collapsible: true }));
+  card.appendChild(buildCopyField('Mood', track.mood, 'Mood', { collapsible: true }));
+  if (!legacy && track.vocalPhrase) {
+    card.appendChild(buildCopyField('Vocal Direction', track.vocalPhrase, 'Vocal Direction', { collapsible: true }));
   }
 
-  // Actions row.
-  const actions = el('div', { className: 'card__actions' });
-  const allBtn = el('button', {
-    className: 'btn btn--tiny',
-    text: 'Copy All Settings',
-    attrs: { type: 'button' },
-  });
-  allBtn.addEventListener('click', () =>
-    copyText(formatCopyAllSettings(track), 'All settings'),
-  );
-  actions.appendChild(allBtn);
+  const lyrics = track.lyrics ?? track.lyricsGuide ?? '';
+  card.appendChild(buildCopyField(
+    legacy ? 'Legacy English Lyrics Guidance' : '완성형 한글 Lyrics',
+    lyrics,
+    legacy ? 'Legacy lyrics guidance' : 'Full Korean Lyrics',
+    { collapsible: true, multiline: true, korean: !legacy, shortLabel: 'Lyrics' },
+  ));
 
-  const ytBtn = el('button', {
-    className: 'btn btn--tiny',
-    text: 'Copy YouTube Description',
-    attrs: { type: 'button' },
-  });
-  ytBtn.addEventListener('click', () =>
-    copyText(buildYouTubeDescription(track), 'YouTube description'),
-  );
-  actions.appendChild(ytBtn);
+  if (!legacy && Array.isArray(track.structure)) {
+    card.appendChild(buildCopyField('Song Structure', formatStructure(track.structure), 'Song Structure', { collapsible: true, shortLabel: 'Structure' }));
+    card.appendChild(buildCopyField('Structure Rationale', track.structureRationale, 'Structure Rationale', { collapsible: true, shortLabel: 'Rationale' }));
+    card.appendChild(buildCopyField('Producer Prescription', track.producerPrescription, 'Producer Prescription', { collapsible: true, shortLabel: 'Prescription' }));
+  }
+
+  if (track.type === 'shorts' && track.shortsHookGuide) {
+    const guide = track.shortsHookGuide;
+    if (guide.excerpt) {
+      card.appendChild(buildCopyField('Shorts Exact Excerpt', guide.excerpt, 'Shorts Exact Excerpt', {
+        collapsible: true,
+        multiline: true,
+        korean: true,
+        shortLabel: 'Excerpt',
+      }));
+    }
+    const guideNode = el('details', { className: 'hook-guide' });
+    guideNode.appendChild(el('summary', { className: 'hook-guide__label', text: 'Shorts Hook Guide' }));
+    const list = el('dl');
+    const addRow = (term, description) => {
+      list.appendChild(el('dt', { text: term }));
+      list.appendChild(el('dd', { text: description || '—' }));
+    };
+    addRow('Source', guide.sourceSection || guide.highlightSection);
+    addRow('Highlight', guide.highlightSection);
+    addRow('Video Hook', guide.videoHookIdea);
+    addRow('Hashtags', (guide.captionHashtags || []).map((tag) => `#${tag}`).join(' '));
+    guideNode.appendChild(list);
+    card.appendChild(guideNode);
+  }
+
+  const actions = el('div', { className: 'card__actions' });
+  const copyAll = el('button', { className: 'btn btn--tiny btn--primary-small', text: 'Copy All Settings', attrs: { type: 'button' } });
+  copyAll.addEventListener('click', () => copyText(formatCopyAllSettings(track), 'All settings'));
+  actions.appendChild(copyAll);
+  const copyYouTube = el('button', { className: 'btn btn--tiny', text: 'Copy YouTube Description', attrs: { type: 'button' } });
+  copyYouTube.addEventListener('click', () => copyText(buildYouTubeDescription(track), 'YouTube description'));
+  actions.appendChild(copyYouTube);
   card.appendChild(actions);
 
   return card;
@@ -340,12 +344,8 @@ function renderTracks() {
     return;
   }
   els.emptyState.hidden = true;
-
-  const typeFilter = FILTER_TYPES[state.filter];
-  const visible = state.plan.tracks.filter(
-    (t) => typeFilter == null || t.type === typeFilter,
-  );
-  for (const track of visible) {
+  const type = FILTER_TYPES[state.filter];
+  for (const track of state.plan.tracks.filter((item) => type == null || item.type === type)) {
     els.tracks.appendChild(buildCard(track));
   }
 }
@@ -355,124 +355,85 @@ function render() {
   renderTracks();
 }
 
-// ---------------------------------------------------------------------------
-// Plan lifecycle
-// ---------------------------------------------------------------------------
-
 function setPlan(plan, { persist = true } = {}) {
-  state.plan = plan;
-  if (persist) savePlan(plan);
+  const normalized = normalizePlan(plan);
+  if (!normalized) return false;
+  state.plan = normalized;
+  if (persist) savePlan(normalized);
   render();
+  return true;
 }
 
-/**
- * Shape validation for imported plans. Requires every field the card UI
- * actually renders so a partial JSON cannot import into blank/broken cards.
- * Fully defensive: never throws, returns a boolean.
- */
-function isValidTrack(t) {
-  if (!t || typeof t !== 'object') return false;
-  const isStr = (v) => typeof v === 'string';
-  const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
-  return (
-    isStr(t.id) &&
-    isStr(t.title) &&
-    (t.type === 'main' || t.type === 'shorts') &&
-    isNum(t.week) &&
-    isStr(t.day) &&
-    isStr(t.stylePrompt) &&
-    isStr(t.excludePrompt) &&
-    isStr(t.mood) &&
-    isStr(t.lyricsGuide) &&
-    isStr(t.vocalGender) &&
-    isNum(t.weirdness) &&
-    isNum(t.styleInfluence) &&
-    isStr(t.status) &&
-    isStr(t.releaseDate)
-  );
+function updateFilterButtons() {
+  for (const button of els.filterGroup.querySelectorAll('button[data-filter]')) {
+    const active = button.getAttribute('data-filter') === state.filter;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  }
 }
-
-function isValidPlan(plan) {
-  return (
-    plan &&
-    typeof plan === 'object' &&
-    Array.isArray(plan.tracks) &&
-    plan.tracks.length > 0 &&
-    plan.tracks.every(isValidTrack)
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Event wiring
-// ---------------------------------------------------------------------------
 
 function handleGenerate(event) {
   event.preventDefault();
   const theme = els.themeInput.value.trim();
-  const plan = generateMonthlyPlan({ theme });
-  setPlan(plan);
-  showToast('Monthly plan generated ✓');
+  const plan = generateMonthlyPlan({ theme, seed: freshGenerationSeed() });
+  if (!setPlan(plan)) {
+    showToast('생성된 플랜을 검증할 수 없습니다', true);
+    return;
+  }
+  showToast('새 월간 Suno v6 패키지 생성 완료 ✓');
 }
 
 function handleFilterClick(event) {
-  const btn = event.target.closest('button[data-filter]');
-  if (!btn) return;
-  state.filter = btn.getAttribute('data-filter');
-  for (const b of els.filterGroup.querySelectorAll('button[data-filter]')) {
-    b.classList.toggle('is-active', b === btn);
-  }
+  const button = event.target.closest('button[data-filter]');
+  if (!button) return;
+  state.filter = button.getAttribute('data-filter');
+  updateFilterButtons();
   renderTracks();
 }
 
 function handleExportJson() {
-  if (!state.plan) return showToast('Nothing to export yet', true);
+  if (!state.plan) return showToast('내보낼 플랜이 없습니다', true);
   downloadFile(`${planBaseName()}.json`, toJSON(state.plan), 'application/json');
-  showToast('Exported JSON ✓');
+  showToast('JSON 내보내기 완료 ✓');
 }
 
 function handleExportCsv() {
-  if (!state.plan) return showToast('Nothing to export yet', true);
-  downloadFile(`${planBaseName()}.csv`, toCSV(state.plan), 'text/csv');
-  showToast('Exported CSV ✓');
+  if (!state.plan) return showToast('내보낼 플랜이 없습니다', true);
+  downloadFile(`${planBaseName()}.csv`, toCSV(state.plan), 'text/csv;charset=utf-8');
+  showToast('CSV 내보내기 완료 ✓');
 }
 
 function handleExportMd() {
-  if (!state.plan) return showToast('Nothing to export yet', true);
-  downloadFile(`${planBaseName()}.md`, toMarkdownTable(state.plan), 'text/markdown');
-  showToast('Exported Markdown ✓');
-}
-
-function handleImportClick() {
-  els.importInput.click();
+  if (!state.plan) return showToast('내보낼 플랜이 없습니다', true);
+  downloadFile(`${planBaseName()}.md`, toMarkdown(state.plan), 'text/markdown;charset=utf-8');
+  showToast('Markdown 내보내기 완료 ✓');
 }
 
 function handleImportChange(event) {
-  const file = event.target.files && event.target.files[0];
+  const file = event.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const plan = fromJSON(String(reader.result));
-      if (!isValidPlan(plan)) {
-        showToast('Invalid plan file', true);
+      const result = inspectPlanSchema(fromJSON(String(reader.result)));
+      if (!result.plan) {
+        const message = result.error === 'future-schema'
+          ? '더 최신 버전의 플랜이라 가져올 수 없습니다'
+          : '손상되었거나 지원하지 않는 플랜입니다';
+        showToast(message, true);
         return;
       }
       state.filter = 'all';
-      for (const b of els.filterGroup.querySelectorAll('button[data-filter]')) {
-        b.classList.toggle('is-active', b.getAttribute('data-filter') === 'all');
-      }
-      if (els.themeInput && typeof plan.theme === 'string') {
-        els.themeInput.value = plan.theme;
-      }
-      setPlan(plan);
-      showToast('Plan imported ✓');
+      updateFilterButtons();
+      if (typeof result.plan.theme === 'string') els.themeInput.value = result.plan.theme;
+      setPlan(result.plan);
+      showToast(result.legacy ? 'Legacy v1 플랜을 안전하게 불러왔습니다 ✓' : '플랜 가져오기 완료 ✓');
     } catch {
-      showToast('Could not parse JSON', true);
+      showToast('JSON을 해석할 수 없습니다', true);
     }
   };
-  reader.onerror = () => showToast('Could not read file', true);
+  reader.onerror = () => showToast('파일을 읽을 수 없습니다', true);
   reader.readAsText(file);
-  // Reset so re-importing the same file fires change again.
   event.target.value = '';
 }
 
@@ -482,15 +443,14 @@ function init() {
   els.exportJson.addEventListener('click', handleExportJson);
   els.exportCsv.addEventListener('click', handleExportCsv);
   els.exportMd.addEventListener('click', handleExportMd);
-  els.importJson.addEventListener('click', handleImportClick);
+  els.importJson.addEventListener('click', () => els.importInput.click());
   els.importInput.addEventListener('change', handleImportChange);
+  updateFilterButtons();
 
   const saved = loadPlan();
-  if (isValidPlan(saved)) {
+  if (saved) {
     state.plan = saved;
-    if (els.themeInput && typeof saved.theme === 'string') {
-      els.themeInput.value = saved.theme;
-    }
+    if (typeof saved.theme === 'string') els.themeInput.value = saved.theme;
   }
   render();
 }
