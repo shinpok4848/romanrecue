@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SunoFlow — a dependency-free Suno v6 music + YouTube monthly release planner."
+    />
+    <title>SunoFlow</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header__brand">
+        <span class="app-header__logo" aria-hidden="true">🎛️</span>
+        <div>
+          <h1 class="app-header__title">SunoFlow</h1>
+          <p class="app-header__tagline">Suno v6 · Monthly release planner</p>
+        </div>
+      </div>
+      <form id="generate-form" class="generate-bar" autocomplete="off">
+        <label class="generate-bar__label" for="theme-input">Monthly Theme</label>
+        <input
+          id="theme-input"
+          name="theme"
+          type="text"
+          class="generate-bar__input"
+          placeholder="예: 봄밤 드라이브 / Late Night Neon"
+        />
+        <button id="generate-btn" type="submit" class="btn btn--accent">
+          Generate Month
+        </button>
+      </form>
+    </header>
+
+    <section class="controls" aria-label="Filters and export">
+      <div
+        class="controls__group"
+        role="group"
+        aria-label="Track filter"
+        id="filter-group"
+      >
+        <button type="button" class="btn btn--filter is-active" data-filter="all">
+          All
+        </button>
+        <button type="button" class="btn btn--filter" data-filter="main">
+          본편 / Full
+        </button>
+        <button type="button" class="btn btn--filter" data-filter="shorts">
+          숏츠 / Shorts
+        </button>
+      </div>
+      <div class="controls__group controls__group--export">
+        <button type="button" class="btn" id="export-json-btn">Export JSON</button>
+        <button type="button" class="btn" id="import-json-btn">Import JSON</button>
+        <button type="button" class="btn" id="export-csv-btn">Export CSV</button>
+        <button type="button" class="btn" id="export-md-btn">Export Markdown</button>
+        <input
+          id="import-json-input"
+          type="file"
+          accept="application/json,.json"
+          class="visually-hidden"
+        />
+      </div>
+    </section>
+
+    <main class="workspace">
+      <section class="panel" aria-labelledby="calendar-heading">
+        <h2 id="calendar-heading" class="panel__heading">Release Calendar</h2>
+        <div id="calendar" class="calendar" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="tracks-heading">
+        <h2 id="tracks-heading" class="panel__heading">Tracks</h2>
+        <div id="tracks" class="track-grid" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state" hidden>
+          <p class="empty-state__title">No plan yet.</p>
+          <p class="empty-state__hint">
+            Enter a monthly theme above and hit <strong>Generate Month</strong> to
+            build a 4-week batch of Suno v6 prompts.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="assets/js/app.js"></script>
+  </body>
+</html>
