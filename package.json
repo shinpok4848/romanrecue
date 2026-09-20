@@ -1,9 +1,9 @@
 {
   "name": "sunoflow",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "SunoFlow: a build-free, dependency-free static Suno v6 music + YouTube monthly release planner. No bundler, no install step; open index.html or serve the folder.",
+  "description": "SunoFlow v2: a dependency-free static Suno v6 Korean songwriting package engine with coherent titles, full lyrics, prompts, and linked Shorts.",
   "scripts": {
     "test": "node --test"
   }

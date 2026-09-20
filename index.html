@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="SunoFlow — a dependency-free Suno v6 music + YouTube monthly release planner."
+      content="SunoFlow — 테마 한 줄로 일관된 이중언어 제목, 완성형 한글 가사, Suno v6 프롬프트와 Shorts를 만드는 월간 플래너."
     />
-    <title>SunoFlow</title>
+    <title>SunoFlow · Korean Songwriting Engine</title>
     <link rel="stylesheet" href="assets/css/styles.css" />
   </head>
   <body>
@@ -16,46 +16,85 @@
         <span class="app-header__logo" aria-hidden="true">🎛️</span>
         <div>
           <h1 class="app-header__title">SunoFlow</h1>
-          <p class="app-header__tagline">Suno v6 · Monthly release planner</p>
+          <p class="app-header__tagline">Suno v6 · Coherent Korean songwriting engine</p>
+          <p class="app-header__promise">테마 한 줄 → 제목 + 완성형 한글 가사 + v6 프롬프트</p>
         </div>
       </div>
       <form id="generate-form" class="generate-bar" autocomplete="off">
-        <label class="generate-bar__label" for="theme-input">Monthly Theme</label>
-        <input
-          id="theme-input"
-          name="theme"
-          type="text"
-          class="generate-bar__input"
-          placeholder="예: 봄밤 드라이브 / Late Night Neon"
-        />
-        <button id="generate-btn" type="submit" class="btn btn--accent">
-          Generate Month
-        </button>
+        <div
+          id="quick-mode-group"
+          class="quick-modes"
+          role="group"
+          aria-labelledby="quick-modes-label"
+          aria-describedby="quick-modes-hint"
+        >
+          <div class="quick-modes__copy">
+            <span id="quick-modes-label" class="quick-modes__label">원클릭 한글 노래 모드</span>
+            <span id="quick-modes-hint" class="quick-modes__hint">
+              클릭하면 새 4주 패키지를 즉시 만들고, 같은 모드를 다시 누르면 새 seed 변형을 만듭니다.
+            </span>
+          </div>
+          <div class="quick-modes__buttons">
+            <button
+              type="button"
+              class="btn btn--quick-mode"
+              data-theme="위로곡 · 지친 마음을 다독이는 따뜻한 위로와 안식"
+              aria-pressed="false"
+            >
+              위로곡
+            </button>
+            <button
+              type="button"
+              class="btn btn--quick-mode"
+              data-theme="응원곡 · 다시 일어설 용기와 새출발을 함께 외치는 노래"
+              aria-pressed="false"
+            >
+              응원곡
+            </button>
+            <button
+              type="button"
+              class="btn btn--quick-mode"
+              data-theme="행복한 음악 · 햇살과 웃음이 번지는 평범해서 눈부신 하루"
+              aria-pressed="false"
+            >
+              행복한 음악
+            </button>
+          </div>
+        </div>
+        <div class="generate-bar__custom">
+          <label class="generate-bar__label" for="theme-input">월간 테마 한 줄</label>
+          <input
+            id="theme-input"
+            name="theme"
+            type="text"
+            class="generate-bar__input"
+            placeholder="예: 초가을 새벽 감성과 주말 드라이브"
+            maxlength="120"
+          />
+          <button id="generate-btn" type="submit" class="btn btn--accent">
+            새 월간 패키지 생성
+          </button>
+        </div>
       </form>
     </header>
 
-    <section class="controls" aria-label="Filters and export">
-      <div
-        class="controls__group"
-        role="group"
-        aria-label="Track filter"
-        id="filter-group"
-      >
-        <button type="button" class="btn btn--filter is-active" data-filter="all">
-          All
+    <section class="controls" aria-label="트랙 필터와 내보내기">
+      <div class="controls__group" role="group" aria-label="트랙 필터" id="filter-group">
+        <button type="button" class="btn btn--filter is-active" data-filter="all" aria-pressed="true">
+          전체 / All
         </button>
-        <button type="button" class="btn btn--filter" data-filter="main">
+        <button type="button" class="btn btn--filter" data-filter="main" aria-pressed="false">
           본편 / Full
         </button>
-        <button type="button" class="btn btn--filter" data-filter="shorts">
+        <button type="button" class="btn btn--filter" data-filter="shorts" aria-pressed="false">
           숏츠 / Shorts
         </button>
       </div>
       <div class="controls__group controls__group--export">
-        <button type="button" class="btn" id="export-json-btn">Export JSON</button>
-        <button type="button" class="btn" id="import-json-btn">Import JSON</button>
-        <button type="button" class="btn" id="export-csv-btn">Export CSV</button>
-        <button type="button" class="btn" id="export-md-btn">Export Markdown</button>
+        <button type="button" class="btn" id="export-json-btn">JSON 내보내기</button>
+        <button type="button" class="btn" id="import-json-btn">JSON 가져오기</button>
+        <button type="button" class="btn" id="export-csv-btn">CSV 내보내기</button>
+        <button type="button" class="btn" id="export-md-btn">Markdown 내보내기</button>
         <input
           id="import-json-input"
           type="file"
@@ -67,25 +106,30 @@
 
     <main class="workspace">
       <section class="panel" aria-labelledby="calendar-heading">
-        <h2 id="calendar-heading" class="panel__heading">Release Calendar</h2>
+        <div class="panel__heading-row">
+          <h2 id="calendar-heading" class="panel__heading">월간 릴리스 캘린더</h2>
+          <p class="panel__hint">4주 · 본편 8곡 · 부모 훅에서 파생한 Shorts 8개</p>
+        </div>
         <div id="calendar" class="calendar" aria-live="polite"></div>
       </section>
 
       <section class="panel" aria-labelledby="tracks-heading">
-        <h2 id="tracks-heading" class="panel__heading">Tracks</h2>
+        <div class="panel__heading-row">
+          <h2 id="tracks-heading" class="panel__heading">Suno v6 패키지</h2>
+          <p class="panel__hint">긴 필드는 펼쳐 보고 각 블록을 바로 복사할 수 있습니다.</p>
+        </div>
         <div id="tracks" class="track-grid" aria-live="polite"></div>
         <div id="empty-state" class="empty-state" hidden>
-          <p class="empty-state__title">No plan yet.</p>
+          <p class="empty-state__title">아직 생성된 플랜이 없습니다.</p>
           <p class="empty-state__hint">
-            Enter a monthly theme above and hit <strong>Generate Month</strong> to
-            build a 4-week batch of Suno v6 prompts.
+            테마 한 줄을 입력하면 같은 콘셉트로 묶인 이중언어 제목, 완성형 한글 가사,
+            Mood·Style·Exclude·구조·프로듀서 처방과 Shorts까지 4주치로 만듭니다.
           </p>
         </div>
       </section>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-
     <script type="module" src="assets/js/app.js"></script>
   </body>
 </html>

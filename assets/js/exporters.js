@@ -1,133 +1,232 @@
 // exporters.js
-//
-// Pure serialization helpers for a monthly plan. Every function returns a
-// STRING (or parses one); the actual file download / clipboard write belongs to
-// the UI layer. NO DOM access — importable in node:test.
+// Pure lossless JSON plus human-oriented CSV, Markdown, and YouTube outputs.
+// No DOM, network, framework, or package dependency.
 
-/**
- * Serialize a plan to pretty-printed JSON.
- * @param {object} plan
- * @returns {string}
- */
+import { formatStructure } from './structureProfiles.js';
+
 export function toJSON(plan) {
   return JSON.stringify(plan, null, 2);
 }
 
-/**
- * Parse a plan from a JSON string. Throws on invalid JSON (caller handles it).
- * @param {string} str
- * @returns {object}
- */
 export function fromJSON(str) {
   return JSON.parse(str);
 }
 
-/** CSV columns, in order. */
+// v1 columns remain in their original order; v2 fields are appended so saved
+// spreadsheet workflows do not shift existing columns.
 const CSV_COLUMNS = [
-  'week',
-  'day',
-  'type',
-  'releaseDate',
-  'status',
-  'title',
-  'stylePrompt',
-  'excludePrompt',
-  'mood',
-  'vocalGender',
-  'weirdness',
-  'styleInfluence',
+  ['week', (track) => track.week],
+  ['day', (track) => track.day],
+  ['type', (track) => track.type],
+  ['releaseDate', (track) => track.releaseDate],
+  ['status', (track) => track.status],
+  ['title', (track) => track.title],
+  ['stylePrompt', (track) => track.stylePrompt],
+  ['excludePrompt', (track) => track.excludePrompt],
+  ['mood', (track) => track.mood],
+  ['vocalGender', (track) => track.vocalGender],
+  ['weirdness', (track) => track.weirdness],
+  ['styleInfluence', (track) => track.styleInfluence],
+  ['id', (track) => track.id],
+  ['linkedTrackId', (track) => track.linkedTrackId],
+  ['presetId', (track) => track.presetId],
+  ['structureId', (track) => track.structureId],
+  ['titleKo', (track) => track.titleKo],
+  ['titleEn', (track) => track.titleEn],
+  ['paletteId', (track) => track.concept?.paletteId],
+  ['conceptScene', (track) => track.concept?.scene],
+  ['conceptEmotionalArc', (track) => track.concept?.emotionalArc],
+  ['bpm', (track) => track.bpm],
+  ['key', (track) => track.key],
+  ['vocalPhrase', (track) => track.vocalPhrase],
+  ['structure', (track) => Array.isArray(track.structure) ? formatStructure(track.structure) : track.structure],
+  ['structureRationale', (track) => track.structureRationale],
+  ['producerPrescription', (track) => track.producerPrescription],
+  ['lyrics', (track) => track.lyrics ?? track.lyricsGuide],
+  ['strongestHookTag', (track) => track.strongestHookTag],
+  ['shortsSourceSection', (track) => track.shortsHookGuide?.sourceSection],
+  ['shortsExcerpt', (track) => track.shortsHookGuide?.excerpt],
 ];
 
-/**
- * Escape a single CSV field: wrap in double quotes when it contains a comma,
- * quote, or newline, doubling any embedded quotes.
- * @param {*} value
- * @returns {string}
- */
 function escapeCSVField(value) {
-  const str = value == null ? '' : String(value);
-  if (/[",\n\r]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
+  // RFC-style quoted fields may contain CR and LF. Normalize embedded lyric
+  // line endings to CR so each logical record remains one LF-delimited line;
+  // spreadsheet readers still render those quoted fields as multiline cells.
+  const str = value == null ? '' : String(value).replace(/\r\n|\n|\r/g, '\r');
+  if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
   return str;
 }
 
-/**
- * Serialize a plan's tracks to CSV: a header row plus one row per track.
- * @param {object} plan
- * @returns {string}
- */
 export function toCSV(plan) {
-  const tracks = (plan && plan.tracks) || [];
-  const rows = [CSV_COLUMNS.join(',')];
+  const tracks = Array.isArray(plan?.tracks) ? plan.tracks : [];
+  const rows = [CSV_COLUMNS.map(([name]) => name).join(',')];
   for (const track of tracks) {
-    const row = CSV_COLUMNS.map((col) => escapeCSVField(track[col]));
-    rows.push(row.join(','));
+    rows.push(CSV_COLUMNS.map(([, read]) => escapeCSVField(read(track))).join(','));
   }
   return rows.join('\n');
 }
 
-/**
- * Build a copy-ready YouTube description for a single track: the title, the
- * key track details, a note that the audio was generated with Suno AI, and
- * hashtags.
- * @param {object} track
- * @returns {string}
- */
-export function buildYouTubeDescription(track) {
-  const lines = [
-    track.title,
-    '',
-    `🎵 Genre: ${track.genre || 'K-Pop'}`,
-    `📅 Release: ${track.releaseDate}`,
-    `🎚️ Mood: ${track.mood}`,
-    '',
-    '🤖 Audio generated with Suno AI.',
-    'Planned and organized with SunoFlow.',
-    '',
-  ];
-
-  const tags = new Set();
-  if (track.genre) tags.add(track.genre.replace(/[^a-zA-Z0-9]+/g, ''));
-  tags.add('KPop');
-  tags.add('SunoAI');
-  tags.add('AIMusic');
-  if (track.type === 'shorts') tags.add('Shorts');
-  if (track.type === 'shorts' && track.shortsHookGuide) {
-    for (const h of track.shortsHookGuide.captionHashtags || []) tags.add(h);
-  }
-  lines.push([...tags].map((t) => `#${t}`).join(' '));
-
-  return lines.join('\n');
+function escapeTableCell(value) {
+  return value == null
+    ? ''
+    : String(value).replace(/\|/g, '\\|').replace(/\r?\n|\r/g, ' ');
 }
 
-/**
- * Render a plan as a well-formed GitHub-flavoured Markdown table. Pipe
- * characters inside cell text are escaped so the table stays valid.
- * @param {object} plan
- * @returns {string}
- */
+/** Stable compact table retained as a compatibility helper. */
 export function toMarkdownTable(plan) {
-  const tracks = (plan && plan.tracks) || [];
+  const tracks = Array.isArray(plan?.tracks) ? plan.tracks : [];
   const headers = ['Week', 'Day', 'Type', 'Release', 'Status', 'Title', 'Style', 'Mood'];
-  const escapeCell = (v) => (v == null ? '' : String(v).replace(/\|/g, '\\|').replace(/\r?\n/g, ' '));
-
   const lines = [
     `| ${headers.join(' | ')} |`,
     `| ${headers.map(() => '---').join(' | ')} |`,
   ];
-  for (const t of tracks) {
+  for (const track of tracks) {
     const cells = [
-      t.week,
-      t.day,
-      t.type,
-      t.releaseDate,
-      t.status,
-      t.title,
-      t.stylePrompt,
-      t.mood,
-    ].map(escapeCell);
+      track.week,
+      track.day,
+      track.type,
+      track.releaseDate,
+      track.status,
+      track.title,
+      track.stylePrompt,
+      track.mood,
+    ].map(escapeTableCell);
     lines.push(`| ${cells.join(' | ')} |`);
   }
+  return lines.join('\n');
+}
+
+function fencedText(value) {
+  const content = String(value ?? '');
+  const runs = content.match(/`+/g) || [];
+  const longest = runs.reduce((max, run) => Math.max(max, run.length), 0);
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}text\n${content}\n${fence}`;
+}
+
+/** Full Markdown export: scan-friendly summary followed by complete packages. */
+export function toMarkdown(plan) {
+  const tracks = Array.isArray(plan?.tracks) ? plan.tracks : [];
+  const summary = toMarkdownTable(plan);
+  const lines = [
+    '# SunoFlow Monthly Package',
+    '',
+    `- Schema: ${plan?.schemaVersion ?? 'Legacy v1'}`,
+    `- Engine: ${plan?.engineVersion ?? 'Legacy'}`,
+    `- Theme: ${plan?.theme ?? ''}`,
+    `- Start: ${plan?.startDate ?? ''}`,
+    '',
+    '## Release Summary',
+    '',
+    summary,
+  ];
+
+  for (const track of tracks) {
+    const lyrics = track.lyrics ?? track.lyricsGuide ?? '';
+    const legacy = !track.lyrics && !track.structureId;
+    lines.push(
+      '',
+      `## W${track.week} ${track.day} · ${track.type === 'main' ? 'Full Track' : 'Shorts'}`,
+      '',
+      `**Title:** ${track.title ?? ''}`,
+      `**Genre:** ${track.genre ?? 'K-Pop'}`,
+      `**Release / Status:** ${track.releaseDate ?? ''} · ${track.status ?? ''}`,
+      `**BPM / Key / Vocal:** ${track.bpm ?? 'Legacy'} / ${track.key ?? 'Legacy'} / ${track.vocalGender ?? ''}`,
+      `**Weirdness / Style Influence:** ${track.weirdness ?? ''}% / ${track.styleInfluence ?? ''}%`,
+      '',
+      '### Suno v6 Fields',
+      '',
+      `**Style:** ${track.stylePrompt ?? ''}`,
+      '',
+      `**Exclude:** ${track.excludePrompt ?? ''}`,
+      '',
+      `**Mood:** ${track.mood ?? ''}`,
+    );
+
+    if (!legacy) {
+      lines.push(
+        '',
+        '### Structure & Production',
+        '',
+        `**Structure:** ${Array.isArray(track.structure) ? formatStructure(track.structure) : track.structure ?? ''}`,
+        '',
+        `**Rationale:** ${track.structureRationale ?? ''}`,
+        '',
+        `**Prescription:** ${track.producerPrescription ?? ''}`,
+      );
+    }
+
+    if (track.type === 'shorts' && track.shortsHookGuide?.excerpt) {
+      lines.push('', '### Exact Shorts Excerpt', '', fencedText(track.shortsHookGuide.excerpt));
+    }
+
+    lines.push(
+      '',
+      legacy ? '### Legacy English Lyrics Guidance' : '### Complete Korean Lyrics',
+      '',
+      fencedText(lyrics),
+    );
+  }
+
+  return lines.join('\n');
+}
+
+function mainLyricExcerpt(track) {
+  const sections = Array.isArray(track?.lyricSections) ? track.lyricSections : [];
+  const source = sections.find((section) => section.isStrongestHook)
+    || [...sections].reverse().find((section) => ['Final Chorus', 'Chorus', 'Hook', 'Drop'].includes(section.section));
+  return Array.isArray(source?.lines) ? source.lines.slice(0, 4).join('\n') : '';
+}
+
+function youtubeLyricExcerpt(track) {
+  if (track.type === 'shorts' && track.shortsHookGuide?.excerpt) {
+    return track.shortsHookGuide.excerpt;
+  }
+  return mainLyricExcerpt(track);
+}
+
+function hashtagToken(value) {
+  return String(value ?? '').replace(/[^a-zA-Z0-9가-힣]+/g, '');
+}
+
+export function buildYouTubeDescription(track) {
+  const lines = [
+    track.title ?? '',
+    '',
+    `🎵 장르 / Genre: ${track.genre || 'K-Pop'}`,
+    `📅 공개 / Release: ${track.releaseDate ?? ''}`,
+    `🎚️ Mood: ${track.mood ?? ''}`,
+  ];
+
+  const excerpt = youtubeLyricExcerpt(track);
+  if (excerpt && /[가-힣]/.test(excerpt)) {
+    lines.push('', '🎤 가사 하이라이트', excerpt);
+  }
+
+  lines.push(
+    '',
+    '🤖 Audio generated by the creator with Suno AI.',
+    '🧭 Song package planned with SunoFlow — no API connection.',
+    '',
+  );
+
+  const seen = new Set();
+  const tags = [];
+  const addTag = (value) => {
+    const token = hashtagToken(value);
+    const identity = token.toLocaleLowerCase('en-US');
+    if (token && !seen.has(identity)) {
+      seen.add(identity);
+      tags.push(token);
+    }
+  };
+  addTag(track.genre);
+  addTag('KPop');
+  addTag('SunoAI');
+  addTag('AIMusic');
+  if (track.type === 'shorts') addTag('Shorts');
+  for (const tag of track.shortsHookGuide?.captionHashtags || []) addTag(tag);
+  lines.push(tags.map((tag) => `#${tag}`).join(' '));
+
   return lines.join('\n');
 }
