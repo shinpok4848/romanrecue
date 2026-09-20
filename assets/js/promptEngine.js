@@ -23,7 +23,7 @@ import {
 } from './seededRandom.js';
 
 export const DEFAULT_SEED = 20240101;
-export const ENGINE_VERSION = '2.0.0';
+export const ENGINE_VERSION = '2.1.0';
 export const SCHEMA_VERSION = 2;
 
 // Compatibility exports used by existing integrations and tests.
@@ -272,7 +272,12 @@ function buildMainTrack({ preset, palette, lane, theme, seed, ordinal, base }) {
   const lyricPackage = buildFullLyrics({
     profile,
     concept,
+    preset,
+    bpm: style.bpm,
+    key: style.key,
+    vocalPhrase: style.vocalPhrase,
     vocalGender: style.vocalGender,
+    lane,
     rng: createNamedRng(seed, 'lyrics', base.id),
   });
 
