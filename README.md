@@ -17,6 +17,18 @@ SunoFlow는 Suno API와 연결하지 않습니다. 사용자가 결과를 복사
 
 즉, 매월 **본편 8곡 + 연결된 Shorts 8개**입니다. Shorts는 별도 콘셉트를 임의 생성하지 않고 부모 곡의 제목 코어, 콘셉트, 장르, BPM, Key, 보컬, Mood, Exclude를 그대로 상속합니다. 부모의 마지막 `Chorus`, `Final Chorus`, `Hook`, 또는 `Drop`에서 제목이 포함된 2–4개 연속 가사 줄을 정확히 복사합니다.
 
+## 세 가지 원클릭 한글 노래 모드
+
+생성 폼의 전용 버튼은 단순 가사 방향을 제안하는 것이 아니라, 선택한 의미 팔레트로 **완성형 한글 가사가 있는 Full 8곡 + 각 부모에서 파생한 Shorts 8개**를 즉시 만듭니다.
+
+| 원클릭 모드 | 전용 팔레트 | 창작 의도 |
+| --- | --- | --- |
+| **위로곡** | `comfort-embrace` | 조용한 반주, 비 오는 따뜻한 방, 담요·찻잔·호흡 속에서 쉬거나 울어도 된다고 말합니다. 당장 극복하라고 재촉하지 않습니다. |
+| **응원곡** | `encouragement-forward` | 출발선과 다시 묶은 신발끈, 넘어졌다 함께 일어나는 친구들, 이름을 부르는 경기장 함성으로 전진의 힘을 만듭니다. |
+| **행복한 음악** | `everyday-happiness` | 햇살, 갓 구운 빵, 손뼉, 친구와 작은 축제처럼 이미 곁에 있는 평범한 기쁨을 노래합니다. 시련 극복 서사로 바꾸지 않습니다. |
+
+버튼을 누를 때마다 새 안전 seed를 사용하므로 같은 모드를 연속으로 눌러도 제목, 프리셋, 편곡 파라미터 또는 가사 선택이 달라지는 새 4주 변형을 얻습니다. 모든 Full 가사는 카드에서 처음에는 접힌 상태이며, 펼쳐 읽거나 **Copy Lyrics**로 전문을 한 번에 복사할 수 있습니다.
+
 ## 본편에 포함되는 Suno v6 패키지
 
 각 본편은 다음 정보를 모두 저장하고 화면에서 개별 복사할 수 있습니다.
@@ -78,13 +90,16 @@ Mood는 Suno v6의 독립 입력란에 맞게 Style과 분리하며, 프리셋�
 
 ## 테마와 콘셉트
 
-`assets/js/conceptPalettes.js`에는 최소 다음 여덟 의미 팔레트가 있습니다.
+`assets/js/conceptPalettes.js`에는 다음 11개 의미 팔레트가 있습니다.
 
 - 새벽/밤 (`dawn-night`)
 - 계절/향수 (`season-nostalgia`)
 - 드라이브/자유 (`drive-freedom`)
 - 사랑/이별 (`love-separation`)
 - 치유/성장 (`healing-growth`)
+- 위로/안식 (`comfort-embrace`)
+- 응원/전진 (`encouragement-forward`)
+- 일상의 행복 (`everyday-happiness`)
 - 도시/네온 (`city-neon`)
 - 꿈/우주 (`dream-cosmos`)
 - 바다/여행 (`ocean-travel`)
@@ -96,7 +111,7 @@ Mood는 Suno v6의 독립 입력란에 맞게 Style과 분리하며, 프리셋�
 - 코드에서 같은 `{ theme, startWednesday, seed }`를 명시하면 전체 JSON이 deep-equal입니다.
 - 장르 회전, 콘셉트/제목, Style/parameter, Mood, 가사 섹션은 stable hash 기반의 독립 named PRNG stream을 사용합니다. 한 영역에 난수 선택을 추가해도 다른 영역의 결과가 연쇄적으로 바뀌지 않습니다.
 - 다른 seed는 제목, 프리셋 회전, 보컬/파라미터 또는 가사 변형을 바꿉니다.
-- 브라우저의 **새 월간 패키지 생성** 버튼은 매 클릭마다 `crypto.getRandomValues`로 새 seed를 전달합니다. 제한된 구형 환경에서는 시간+고해상도 타이머+counter를 사용합니다.
+- 브라우저의 **새 월간 패키지 생성**과 세 원클릭 모드 버튼은 매 클릭마다 `crypto.getRandomValues`로 새 seed를 전달합니다. 같은 모드를 반복 클릭해도 새 변형이며, 제한된 구형 환경에서는 시간+고해상도 타이머+counter를 사용합니다.
 
 ## Schema와 이전 플랜
 
@@ -135,12 +150,13 @@ GitHub Pages에서는 루트 `index.html`, `.nojekyll`, 상대 경로 asset만 �
 
 ## 화면 사용법
 
-1. 월간 테마 한 줄을 입력합니다.
-2. **새 월간 패키지 생성**을 누릅니다.
-3. Full/Shorts 필터로 필요한 카드만 봅니다.
-4. 긴 필드를 펼쳐 확인하고 Title, Style, Exclude, Mood, Lyrics, Structure, Rationale, Prescription 또는 **Copy All Settings**를 복사합니다.
-5. 생성 상태를 `Planned → Generated → Published`로 변경합니다.
-6. JSON/CSV/Markdown으로 백업 또는 내보냅니다.
+1. **위로곡**, **응원곡**, **행복한 음악** 중 하나를 누르거나 월간 테마 한 줄을 직접 입력합니다.
+2. 원클릭 모드는 즉시 생성하며, 직접 입력한 테마는 **새 월간 패키지 생성**을 누릅니다.
+3. 같은 원클릭 모드를 다시 누르면 새 seed의 4주 변형이 만들어집니다.
+4. Full/Shorts 필터로 필요한 카드만 봅니다.
+5. 처음에는 접힌 긴 필드와 완성형 한글 가사를 펼쳐 확인하고 Title, Style, Exclude, Mood, Lyrics, Structure, Rationale, Prescription 또는 **Copy All Settings**를 복사합니다. **Copy Lyrics**는 가사 전문을 복사합니다.
+6. 생성 상태를 `Planned → Generated → Published`로 변경합니다.
+7. JSON/CSV/Markdown으로 백업 또는 내보냅니다.
 
 모든 동적 문자열은 `textContent`로 삽입되므로 가져온 테마/가사를 HTML로 실행하지 않습니다.
 
@@ -152,7 +168,7 @@ assets/
   css/styles.css
   js/
     app.js                 # 안전한 DOM 렌더링, clipboard, import/export
-    conceptPalettes.js     # 의미 매칭, 8개 bilingual 팔레트, line banks
+    conceptPalettes.js     # 의미 매칭, 11개 bilingual 팔레트, line banks
     exporters.js           # JSON, CSV, Markdown, YouTube
     genrePresets.js        # 18개 stable-ID Suno v6 presets
     lyricsEngine.js        # 구조형 완성 가사와 Shorts excerpt

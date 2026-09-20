@@ -5,7 +5,12 @@
 
 import { DEFAULT_EXCLUDE, EMOTIONAL, ENERGETIC } from './genrePresets.js';
 import { buildScheduleDates, formatISODate, getNextWednesday } from './schedule.js';
-import { buildTrackConcept, sanitizeThemeCue } from './conceptPalettes.js';
+import {
+  buildTrackConcept,
+  matchThemePalette,
+  PALETTE_BY_ID,
+  sanitizeThemeCue,
+} from './conceptPalettes.js';
 import { getStructureProfile, formatStructure } from './structureProfiles.js';
 import { buildFullLyrics, buildShortLyrics } from './lyricsEngine.js';
 import {
@@ -58,6 +63,103 @@ function vocalChoicesFor(preset) {
     phrase,
     gender: inferVocalGender(phrase, preset.vocalGender),
   }));
+}
+
+const STYLE_ADAPTATION_FIELDS = new Set([
+  'productionPhrase',
+  'instruments',
+  'vocalOptions',
+  'dynamicCurve',
+  'finishingTags',
+]);
+
+function requireNonEmptyStrings(values, label) {
+  if (!Array.isArray(values)
+    || values.length === 0
+    || values.some((value) => typeof value !== 'string' || !value.trim())) {
+    throw new TypeError(`${label} must be a non-empty string array`);
+  }
+  return [...values];
+}
+
+function compatiblePresetPool(palette, lane, canonicalPool) {
+  const configuredIds = palette?.compatiblePresetIdsByLane?.[lane];
+  if (configuredIds == null) return canonicalPool;
+  if (!Array.isArray(configuredIds)
+    || configuredIds.length < 4
+    || configuredIds.some((id) => typeof id !== 'string' || !id.trim())) {
+    throw new TypeError(`Palette ${palette?.id || 'unknown'} needs at least four ${lane} preset IDs`);
+  }
+  const allowedIds = new Set(configuredIds);
+  if (allowedIds.size !== configuredIds.length) {
+    throw new TypeError(`Palette ${palette.id} has duplicate ${lane} preset IDs`);
+  }
+  const compatible = canonicalPool.filter((preset) => allowedIds.has(preset.id));
+  if (compatible.length !== allowedIds.size) {
+    throw new TypeError(`Palette ${palette.id} has an unknown or wrong-lane ${lane} preset ID`);
+  }
+  return compatible;
+}
+
+function effectivePresetForPalette(preset, palette, lane) {
+  const adaptation = palette?.styleAdaptationsByLane?.[lane]?.[preset.id];
+  if (adaptation == null) return preset;
+  if (!adaptation || typeof adaptation !== 'object' || Array.isArray(adaptation)) {
+    throw new TypeError(`Invalid style adaptation for ${palette.id}/${lane}/${preset.id}`);
+  }
+  const unsupported = Object.keys(adaptation)
+    .filter((field) => !STYLE_ADAPTATION_FIELDS.has(field));
+  if (unsupported.length > 0) {
+    throw new TypeError(`Style adaptation cannot replace canonical field ${unsupported[0]}`);
+  }
+
+  const effective = { ...preset };
+  for (const field of ['productionPhrase', 'dynamicCurve']) {
+    if (Object.prototype.hasOwnProperty.call(adaptation, field)) {
+      if (typeof adaptation[field] !== 'string' || !adaptation[field].trim()) {
+        throw new TypeError(`Style adaptation ${field} must be non-empty`);
+      }
+      effective[field] = adaptation[field];
+    }
+  }
+  for (const field of ['instruments', 'finishingTags']) {
+    if (Object.prototype.hasOwnProperty.call(adaptation, field)) {
+      effective[field] = requireNonEmptyStrings(adaptation[field], `Style adaptation ${field}`);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(adaptation, 'vocalOptions')) {
+    const options = adaptation.vocalOptions;
+    if (!Array.isArray(options)
+      || options.length === 0
+      || options.some((option) => !option
+        || !['Female', 'Male', 'Duet'].includes(option.gender)
+        || typeof option.phrase !== 'string'
+        || !option.phrase.trim())) {
+      throw new TypeError('Style adaptation vocalOptions must contain valid voiced phrases');
+    }
+    effective.vocalOptions = options.map((option) => ({ ...option }));
+    effective.vocalCharacterizations = options.map((option) => option.phrase);
+    effective.vocalGender = options[0].gender;
+  }
+  return effective;
+}
+
+function normalizeSemanticPhrase(value) {
+  return String(value ?? '')
+    .toLocaleLowerCase('en-US')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsBlockedMoodTerm(value, blockedTerms) {
+  const normalizedValue = normalizeSemanticPhrase(value);
+  if (!normalizedValue) return false;
+  const paddedValue = ` ${normalizedValue} `;
+  return blockedTerms.some((term) => {
+    const normalizedTerm = normalizeSemanticPhrase(term);
+    return normalizedTerm && paddedValue.includes(` ${normalizedTerm} `);
+  });
 }
 
 function conceptCueFrom(value) {
@@ -117,7 +219,15 @@ export function buildMood(preset, themeOrConcept, rng = mulberry32(DEFAULT_SEED)
   const concept = conceptCueFrom(themeOrConcept);
   const presetWords = [...(preset.moodWords || [])];
   if (presetWords.length > 4) presetWords.splice(Math.floor(rng() * presetWords.length), 1);
-  return uniqueTokens([...presetWords, ...(concept.moodKeywords || [])]).join(', ');
+  const palette = PALETTE_BY_ID[concept.paletteId];
+  const blockedTerms = Array.isArray(palette?.blockedMoodTerms)
+    ? palette.blockedMoodTerms
+    : [];
+  const compatiblePresetWords = presetWords
+    .filter((word) => !containsBlockedMoodTerm(word, blockedTerms));
+  // Palette-authored Mood remains authoritative and is never stripped by a
+  // preset compatibility rule; each dedicated mode contributes three tokens.
+  return uniqueTokens([...compatiblePresetWords, ...(concept.moodKeywords || [])]).join(', ');
 }
 
 /** Legacy helper retained for callers; v2 mains store their full lyrics here. */
@@ -141,8 +251,14 @@ function cloneConcept(concept) {
   };
 }
 
-function buildMainTrack({ preset, lane, theme, seed, ordinal, base }) {
-  const concept = buildTrackConcept({ theme, seed, ordinal, lane });
+function buildMainTrack({ preset, palette, lane, theme, seed, ordinal, base }) {
+  const concept = buildTrackConcept({
+    theme,
+    seed,
+    ordinal,
+    lane,
+    resolvedPalette: palette,
+  });
   const profile = getStructureProfile(preset.structureId);
   const style = buildStylePrompt(preset, concept, createNamedRng(seed, 'style', base.id));
   const parameterRng = createNamedRng(seed, 'parameters', base.id);
@@ -279,13 +395,29 @@ export function generateMonthlyPlan(input = {}) {
   const theme = input.theme != null ? String(input.theme) : '';
   const startWednesday = getNextWednesday(input.startWednesday ?? new Date());
   const schedule = buildScheduleDates(startWednesday);
+  // A compound theme can resolve to a different concept in each programming
+  // lane, so compatibility must be settled before either genre rotation.
+  const palettesByLane = {
+    emotional: matchThemePalette(theme, seed, 'emotional'),
+    energetic: matchThemePalette(theme, seed, 'energetic'),
+  };
+  const emotionalPool = compatiblePresetPool(
+    palettesByLane.emotional,
+    'emotional',
+    EMOTIONAL,
+  );
+  const energeticPool = compatiblePresetPool(
+    palettesByLane.energetic,
+    'energetic',
+    ENERGETIC,
+  );
   const emotionalRotation = buildRotation(
     createNamedRng(seed, 'genre-rotation', 'emotional'),
-    EMOTIONAL.length,
+    emotionalPool.length,
   );
   const energeticRotation = buildRotation(
     createNamedRng(seed, 'genre-rotation', 'energetic'),
-    ENERGETIC.length,
+    energeticPool.length,
   );
 
   const mainByWeek = {};
@@ -297,13 +429,16 @@ export function generateMonthlyPlan(input = {}) {
     if (entry.type !== 'main') continue;
     const weekIndex = entry.week - 1;
     const isWednesday = entry.day === 'Wed';
-    const preset = isWednesday
-      ? EMOTIONAL[emotionalRotation[weekIndex]]
-      : ENERGETIC[energeticRotation[weekIndex]];
     const lane = isWednesday ? 'emotional' : 'energetic';
+    const palette = palettesByLane[lane];
+    const pool = isWednesday ? emotionalPool : energeticPool;
+    const rotation = isWednesday ? emotionalRotation : energeticRotation;
+    const basePreset = pool[rotation[weekIndex]];
+    const preset = effectivePresetForPalette(basePreset, palette, lane);
     const id = `w${entry.week}-${entry.day.toLocaleLowerCase('en-US')}-main`;
     const track = buildMainTrack({
       preset,
+      palette,
       lane,
       theme,
       seed,

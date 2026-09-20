@@ -33,6 +33,28 @@ const BUILD_UP_LINES = [
   '바로 지금',
 ];
 
+function buildUpPairsFor(bank) {
+  const authored = bank?.buildUp;
+  const usable = Array.isArray(authored)
+    && authored.length >= 6
+    && authored.length % 2 === 0
+    && authored.every((line) => typeof line === 'string' && line.trim());
+  const lines = usable ? authored : BUILD_UP_LINES;
+  const pairs = [];
+  for (let index = 0; index < lines.length; index += 2) {
+    pairs.push([lines[index], lines[index + 1]]);
+  }
+  return pairs;
+}
+
+function resolveBridgeResolution(template, titleKo) {
+  const fallback = `${titleKo}, 그 이름으로 다음 장을 열어`;
+  if (typeof template !== 'string' || !template.includes('{titleKo}')) return fallback;
+  const resolved = template.split('{titleKo}').join(titleKo).trim();
+  if (!resolved || !resolved.includes(titleKo) || /[{}]/.test(resolved)) return fallback;
+  return resolved;
+}
+
 export function singerTagForGender(vocalGender) {
   if (vocalGender === 'Male') return '[Male singer]';
   if (vocalGender === 'Duet') return '[Female and Male duet]';
@@ -102,11 +124,12 @@ export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
   const chorusOffset = Math.floor(rng() * bank.chorus.length);
   const chantOffset = Math.floor(rng() * bank.chant.length);
   const preOffset = Math.floor(rng() * PRE_CHORUS_LINES.length);
-  const buildOffset = Math.floor(rng() * BUILD_UP_LINES.length / 2) * 2;
+  const buildUpPairs = buildUpPairsFor(bank);
+  const buildOffset = Math.floor(rng() * buildUpPairs.length);
   const chorusLines = rotate(bank.chorus, chorusOffset);
   const chantLines = rotate(bank.chant, chantOffset);
   const preLines = rotate(PRE_CHORUS_LINES, preOffset);
-  const buildLines = rotate(BUILD_UP_LINES, buildOffset);
+  const buildPairs = rotate(buildUpPairs, buildOffset);
 
   let verseOccurrence = 0;
   let chorusCursor = 0;
@@ -153,8 +176,8 @@ export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
       preCursor += 3;
       result.arrangement = 'withhold the title hook while harmony and register lift';
     } else if (section === 'Build up') {
-      result.lines = buildLines.slice(buildCursor, buildCursor + 2);
-      buildCursor += 2;
+      result.lines = [...buildPairs[buildCursor % buildPairs.length]];
+      buildCursor += 1;
       result.arrangement = `two rising lines resolving directly into ${profile.rules.hookResolution === 'build-up-to-drop' ? 'Drop' : 'Chorus'}`;
     } else if (section === 'Chorus' || section === 'Final Chorus') {
       // Four cold-open R&B choruses still fit the nine authored support lines;
@@ -177,7 +200,7 @@ export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
         : [bank.bridge[0], ...bank.bridge.slice(-2)];
       result.lines = [
         ...bridgeLines,
-        `${concept.titleKo}, 그 이름으로 다음 장을 열어`,
+        resolveBridgeResolution(bank.bridgeResolution, concept.titleKo),
       ];
       result.arrangement = 'genuine narrative turn and harmonic transition before the final peak';
     } else if (section === 'Outro') {

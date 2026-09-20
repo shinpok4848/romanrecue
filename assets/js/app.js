@@ -24,6 +24,7 @@ const state = { plan: null, filter: 'all' };
 const els = {
   form: document.getElementById('generate-form'),
   themeInput: document.getElementById('theme-input'),
+  quickModeGroup: document.getElementById('quick-mode-group'),
   filterGroup: document.getElementById('filter-group'),
   calendar: document.getElementById('calendar'),
   tracks: document.getElementById('tracks'),
@@ -372,15 +373,42 @@ function updateFilterButtons() {
   }
 }
 
-function handleGenerate(event) {
-  event.preventDefault();
-  const theme = els.themeInput.value.trim();
+function updateQuickModeSelection(theme, { allowSelection = true } = {}) {
+  const exactTheme = String(theme ?? '');
+  for (const button of els.quickModeGroup.querySelectorAll('button[data-theme]')) {
+    const selected = allowSelection && button.getAttribute('data-theme') === exactTheme;
+    button.setAttribute('aria-pressed', String(selected));
+  }
+}
+
+function generateForTheme(theme) {
   const plan = generateMonthlyPlan({ theme, seed: freshGenerationSeed() });
   if (!setPlan(plan)) {
     showToast('생성된 플랜을 검증할 수 없습니다', true);
-    return;
+    return false;
   }
   showToast('새 월간 Suno v6 패키지 생성 완료 ✓');
+  return true;
+}
+
+function handleGenerate(event) {
+  event.preventDefault();
+  const theme = els.themeInput.value.trim();
+  updateQuickModeSelection(theme);
+  generateForTheme(theme);
+}
+
+function handleQuickModeClick(event) {
+  const button = event.target.closest('button[data-theme]');
+  if (!button || !els.quickModeGroup.contains(button)) return;
+  const theme = button.getAttribute('data-theme') || '';
+  els.themeInput.value = theme;
+  updateQuickModeSelection(theme);
+  generateForTheme(theme);
+}
+
+function handleThemeInput() {
+  updateQuickModeSelection(els.themeInput.value);
 }
 
 function handleFilterClick(event) {
@@ -426,6 +454,7 @@ function handleImportChange(event) {
       state.filter = 'all';
       updateFilterButtons();
       if (typeof result.plan.theme === 'string') els.themeInput.value = result.plan.theme;
+      updateQuickModeSelection(result.plan.theme, { allowSelection: !result.legacy });
       setPlan(result.plan);
       showToast(result.legacy ? 'Legacy v1 플랜을 안전하게 불러왔습니다 ✓' : '플랜 가져오기 완료 ✓');
     } catch {
@@ -439,6 +468,8 @@ function handleImportChange(event) {
 
 function init() {
   els.form.addEventListener('submit', handleGenerate);
+  els.quickModeGroup.addEventListener('click', handleQuickModeClick);
+  els.themeInput.addEventListener('input', handleThemeInput);
   els.filterGroup.addEventListener('click', handleFilterClick);
   els.exportJson.addEventListener('click', handleExportJson);
   els.exportCsv.addEventListener('click', handleExportCsv);
@@ -446,11 +477,13 @@ function init() {
   els.importJson.addEventListener('click', () => els.importInput.click());
   els.importInput.addEventListener('change', handleImportChange);
   updateFilterButtons();
+  updateQuickModeSelection('', { allowSelection: false });
 
   const saved = loadPlan();
   if (saved) {
     state.plan = saved;
     if (typeof saved.theme === 'string') els.themeInput.value = saved.theme;
+    updateQuickModeSelection(saved.theme, { allowSelection: !isLegacyPlan(saved) });
   }
   render();
 }

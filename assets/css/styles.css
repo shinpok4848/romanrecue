@@ -101,9 +101,21 @@ body {
 
 .generate-bar {
   display: flex;
+  flex: 1 1 620px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  max-width: 760px;
+}
+
+.generate-bar__custom {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
 }
 
 .generate-bar__label {
@@ -114,6 +126,7 @@ body {
 }
 
 .generate-bar__input {
+  flex: 1 1 240px;
   min-width: 240px;
   padding: 10px 12px;
   background: var(--surface-3);
@@ -126,6 +139,60 @@ body {
 
 .generate-bar__input::placeholder {
   color: var(--text-dim);
+}
+
+.quick-modes {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(13, 15, 19, 0.48);
+}
+
+.quick-modes__copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 3px 12px;
+  margin-bottom: 8px;
+}
+
+.quick-modes__label {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.quick-modes__hint {
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.quick-modes__buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.btn--quick-mode {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.btn--quick-mode[aria-pressed="true"],
+.btn--quick-mode[aria-pressed="true"]:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 138, 61, 0.24);
+  font-weight: 700;
 }
 
 /* --- Buttons --- */
@@ -530,10 +597,28 @@ body {
   }
   .generate-bar {
     width: 100%;
+    max-width: none;
+  }
+  .generate-bar__custom {
+    align-items: stretch;
+  }
+  .generate-bar__label {
+    flex-basis: 100%;
   }
   .generate-bar__input {
-    flex: 1;
+    flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
+  }
+  .generate-bar__custom .btn--accent {
+    width: 100%;
+    min-height: 44px;
+  }
+  .quick-modes__buttons {
+    grid-template-columns: 1fr;
+  }
+  .btn--quick-mode {
+    min-height: 46px;
   }
   .calendar {
     grid-template-columns: 1fr;

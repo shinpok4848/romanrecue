@@ -140,8 +140,8 @@ export const CONCEPT_PALETTES = [
     id: 'healing-growth',
     nameKo: '치유와 성장',
     nameEn: 'Healing / Growth',
-    aliasesKo: ['힐링', '치유', '회복', '성장', '위로', '새출발', '괜찮아', '용기'],
-    aliasesEn: ['healing', 'growth', 'recover', 'recovery', 'comfort', 'new beginning', 'courage', 'bloom'],
+    aliasesKo: ['힐링', '치유', '회복', '성장', '새출발', '괜찮아'],
+    aliasesEn: ['healing', 'growth', 'recover', 'recovery', 'new beginning', 'bloom'],
     emotionalArc: '상처를 숨기던 상태에서 작은 돌봄을 반복해 스스로의 속도로 다시 피어나는 회복',
     koreanKeywords: ['금 간 화분', '새잎', '느린 호흡', '다시 피는 마음'],
     moodKeywords: ['포근한 회복', '조용한 용기'],
@@ -164,6 +164,168 @@ export const CONCEPT_PALETTES = [
       chant: ['천천히, 숨을 쉬어', '괜찮아, 다시 걸어', '한 걸음 더, 나를 믿어', '손을 펴, 빛을 받아', '오늘부터, 나의 속도', '다시 한번, 피어나'],
       bridge: ['문득 흉터가 나를 망친 선이 아니라', '여기까지 온 길을 그린 지도처럼 보여', '강해져야만 괜찮은 것은 아니라는 걸', '약한 목소리로도 분명하게 말해 본다'],
       outro: ['열어 둔 창으로 저녁바람이 천천히 들어와', '새잎 곁에 앉아 오늘의 숨을 편히 놓는다'],
+    },
+  }),
+  palette({
+    id: 'comfort-embrace',
+    nameKo: '위로와 안식',
+    nameEn: 'Comfort / Reassurance',
+    aliasesKo: ['위로곡', '위로 노래', '위로', '안심', '안식', '다독임', '쉬어도 돼', '울어도 돼'],
+    aliasesEn: ['comfort', 'comfort song', 'reassurance', 'reassuring', 'consolation', 'rest and reassurance', 'soothing comfort'],
+    emotionalArc: '지친 마음을 고치거나 재촉하지 않고 울음과 침묵을 허락하며 따뜻한 방 안에서 함께 쉬는 안도',
+    koreanKeywords: ['창가의 빗소리', '포근한 담요', '따뜻한 찻잔', '낮게 켠 스탠드', '느리게 고른 숨'],
+    moodKeywords: ['조용한 위로', '포근한 안도', '울어도 되는 밤'],
+    englishProductionCue: 'intimate close-miked reassurance over hushed piano, brushed textures, and blanket-warm room ambience',
+    compatiblePresetIdsByLane: {
+      emotional: ['nostalgic-90s-rnb', 'warm-acoustic-folk', 'city-pop', 'lofi-bedroom-vocal', 'modern-k-ballad', 'midnight-jazz-swing'],
+      energetic: ['neon-synthwave', 'festival-dance-pop', 'analog-nu-disco', 'modern-electro-pop', 'modern-korean-trot'],
+    },
+    englishProductionCueByLane: {
+      emotional: 'close-miked reassurance with felt-piano warmth, brushed detail, patient breathing room, and an intimate gentle release',
+      energetic: 'warm supportive pop lift with rounded drums, open-hearted hooks, and bright motion that never turns confrontational',
+    },
+    blockedMoodTerms: ['aggressive', 'explosive', 'hype', 'rebellious', 'defiant', 'raw', 'stadium', 'party', 'tearful', 'heartbroken'],
+    variants: [
+      { id: 'restful-night', titleKo: '쉬어도 되는 밤', titleEn: 'A Night to Rest', hookPhrase: '쉬어도 되는 밤, 오늘은 아무것도 이기지 않아도 돼', scene: '빗방울이 천천히 흐르는 창문과 낮게 켜 둔 주황빛 스탠드' },
+      { id: 'tears-are-welcome', titleKo: '울어도 괜찮은 방', titleEn: 'A Room for Tears', hookPhrase: '울어도 괜찮은 방, 참았던 마음을 가만히 놓아', scene: '휴지 한 장과 따뜻한 찻잔을 놓아 둔 작은 방의 나무 탁자' },
+      { id: 'blanket-heart', titleKo: '담요 같은 마음', titleEn: 'A Heart Like a Blanket', hookPhrase: '담요 같은 마음, 떨리는 어깨까지 포근히 감싸', scene: '소파 팔걸이에 접힌 크림색 담요와 나란히 놓인 두 개의 쿠션' },
+      { id: 'warm-sip', titleKo: '따뜻한 한 모금', titleEn: 'One Warm Sip', hookPhrase: '따뜻한 한 모금, 굳은 숨이 천천히 풀리게', scene: '김이 오르는 머그잔을 두 손으로 감싼 비 오는 저녁 창가' },
+      { id: 'beside-your-breath', titleKo: '네 숨 곁에', titleEn: 'Beside Your Breath', hookPhrase: '네 숨 곁에, 말없이 같은 박자로 머물게', scene: '어두운 침대 곁 작은 의자와 고르게 오르내리는 이불 끝' },
+      { id: 'rain-at-window', titleKo: '비가 머무는 창가', titleEn: 'Rain at the Window', hookPhrase: '비가 머무는 창가, 그칠 때를 정하지 않아도 돼', scene: '빗물이 긴 선을 그리는 유리와 창틀 위의 작은 화분' },
+      { id: 'light-left-on', titleKo: '말없이 켜 둔 불', titleEn: 'The Light Left On', hookPhrase: '말없이 켜 둔 불, 돌아볼 때 언제나 여기 있어', scene: '늦은 밤 현관 틈으로 새어 나오는 부드러운 노란 불빛' },
+      { id: 'enough-for-today', titleKo: '오늘은 여기까지', titleEn: 'Enough for Today', hookPhrase: '오늘은 여기까지, 남은 일은 내일에게 맡겨 둬', scene: '덮어 둔 공책과 알람을 끈 휴대전화 옆의 식어 가는 차' },
+    ],
+    lineBank: {
+      intro: ['창문을 타는 빗소리가 방 안의 속도를 낮춰', '낮게 켠 스탠드 불빛이 접은 담요 위에 머물러'],
+      verse1: ['젖은 우산을 현관에 기대고 조용히 앉아', '따뜻한 찻잔 둘레를 식은 손으로 감싸고', '참아 둔 눈물이 볼을 지나가도록 내버려 둔 채', '괜찮다는 대답 대신 천천히 숨을 나눈다'],
+      verse2: ['나는 커튼을 반쯤 닫아 빗빛을 부드럽게 만들고', '휴지 한 장과 빈 의자를 네 가까이에 놓아', '말이 나오지 않으면 주전자 소리만 함께 듣고', '무거운 어깨 아래 담요 끝을 가만히 여며 주며', '오늘의 남은 일은 내일에게 조용히 맡겨 둔다'],
+      chorus: ['잘하려 애쓰지 않아도 이 방은 너를 품어', '참았던 울음이 흘러도 누구도 재촉하지 않아', '고른 숨 하나마다 따뜻한 자리가 생겨', '젖은 마음 곁에 작은 찻잔의 온기가 머물러', '대답 없는 시간도 그대로 충분히 다정해', '긴 밤을 건너지 않아도 지금 여기 쉬어 가', '흔들린 목소리까지 담요처럼 감싸 줄게', '비가 그칠 때를 정하지 말고 창가에 기대어', '아무 말 없이도 네 곁의 불을 켜 둘게'],
+      chant: ['쉬어 가도 돼, 이 밤 안에서', '울어도 돼, 내가 곁에 있어', '천천히 숨, 하나 둘', '따뜻한 방, 포근한 담요', '오늘은 여기, 그대로 있어', '괜찮지 않아도, 괜찮아'],
+      bridge: ['눈물을 닦으라는 말 대신 손수건을 건네고', '침묵도 함께 있을 수 있는 대화임을 알았어', '나아질 시간을 약속하지 않아도 괜찮아서', '우리는 빗소리 곁에 오래 가만히 머문다'],
+      buildUp: [
+        '고르게 이어진 숨 위로 작은 온기가 포개져',
+        '이 빛 곁에',
+        '담요 끝의 따뜻함이 두 어깨 사이로 번져',
+        '같은 숨으로',
+        '낮게 켠 불빛과 찻잔의 김이 한곳에 모여',
+        '네 곁에 오래',
+      ],
+      bridgeResolution: '{titleKo}, 네 숨 곁에서 오늘도 조용히 함께 머물게',
+      outro: ['식은 찻잔을 내려놓고 담요를 턱밑까지 올려', '빗소리가 잦아들지 않아도 편히 눈을 감는다'],
+    },
+  }),
+  palette({
+    id: 'encouragement-forward',
+    nameKo: '응원과 전진',
+    nameEn: 'Encouragement / Forward Motion',
+    aliasesKo: ['응원곡', '응원 노래', '응원', '힘내', '파이팅', '할 수 있어', '격려', '동기부여', '도전', '용기', '전진'],
+    aliasesEn: ['encouragement', 'encouragement song', 'motivation', 'motivational', 'courage', 'you can do it', 'keep going', 'fighting', 'cheer anthem'],
+    emotionalArc: '망설이는 출발선에서 신발끈을 다시 묶고 넘어져도 친구들의 함성과 함께 일어나 앞으로 달리는 연대',
+    koreanKeywords: ['흰 출발선', '단단한 신발끈', '흙 묻은 무릎', '이름을 부르는 친구들', '관중석의 함성'],
+    moodKeywords: ['벅찬 응원', '전진하는 용기', '함께 뛰는 열기'],
+    englishProductionCue: 'driving live drums, rising brass, and gang-vocal calls shaped for stadium-scale forward momentum',
+    compatiblePresetIdsByLane: {
+      emotional: ['acoustic-indie-funk', 'warm-acoustic-folk', 'cinematic-ballad', 'airy-indie-pop', 'modern-k-ballad', 'city-pop'],
+      energetic: ['edm-hiphop-festival', 'festival-dance-pop', 'modern-electro-pop', 'stadium-rock-band', 'seoul-night-trap', 'modern-korean-trot', 'two-step-uk-garage'],
+    },
+    englishProductionCueByLane: {
+      emotional: 'determined acoustic-to-cinematic lift with steady live drums, resilient vocals, and hopeful forward motion',
+      energetic: 'driving live drums, rising brass, gang-vocal calls, and stadium-scale forward momentum',
+    },
+    blockedMoodTerms: ['hushed', 'quiet', 'sleepy', 'rainy', 'mellow', 'tearful', 'heartbroken'],
+    styleAdaptationsByLane: {
+      emotional: {
+        'cinematic-ballad': {
+          vocalOptions: [
+            { gender: 'Female', phrase: 'The female lead vocal is clear, determined, and mixed up front, growing from grounded resolve into a controlled uplifting belt entirely free of vocal fry' },
+            { gender: 'Male', phrase: 'The male lead vocal is clear, determined, and mixed up front, growing from grounded resolve into a controlled uplifting belt entirely free of vocal fry' },
+          ],
+          dynamicCurve: 'starts with focused piano resolve, adds strings and a steady pulse, opens after the key change into an uplifting final peak, then lands with assured warmth',
+        },
+        'modern-k-ballad': {
+          vocalOptions: [
+            { gender: 'Female', phrase: 'The female lead vocal is pristine and mixed up front, grounded and resolute in the opening before a controlled uplifting final belt' },
+            { gender: 'Male', phrase: 'The male lead vocal is pristine and mixed up front, grounded and resolute in the opening before a controlled uplifting final belt' },
+          ],
+          dynamicCurve: 'starts with focused piano and restrained live drums, builds through resolute choruses and a turning bridge, uses one key change for an uplifting final peak, then lands with steady warmth',
+        },
+      },
+    },
+    variants: [
+      { id: 'our-starting-line', titleKo: '출발선의 우리', titleEn: 'Us at the Starting Line', hookPhrase: '출발선의 우리, 하나 둘 셋 앞으로 뛰어', scene: '아침 운동장의 흰 선과 나란히 놓인 두 개의 스타팅 블록' },
+      { id: 'laces-tied-again', titleKo: '다시 묶은 신발끈', titleEn: 'Laces Tied Again', hookPhrase: '다시 묶은 신발끈, 이번 걸음은 더 힘차게', scene: '흙 묻은 운동화 위로 단단히 당겨 묶은 파란 끈' },
+      { id: 'call-your-name', titleKo: '네 이름을 외쳐', titleEn: 'Call Out Your Name', hookPhrase: '네 이름을 외쳐, 관중석 끝까지 힘이 닿게', scene: '친구들이 이름 적힌 손팻말을 높이 든 운동장 관중석' },
+      { id: 'one-step-forward', titleKo: '한 걸음 앞으로', titleEn: 'One Step Forward', hookPhrase: '한 걸음 앞으로, 작은 시작이 길을 열어', scene: '초록 신호 아래 첫발을 내딛는 러닝 트랙의 운동화' },
+      { id: 'rise-together', titleKo: '넘어져도 함께', titleEn: 'Together When We Fall', hookPhrase: '넘어져도 함께, 손을 잡고 다시 일어나', scene: '비 온 트랙 위에서 한 선수가 다른 선수의 손을 잡아 주는 순간' },
+      { id: 'fighting-today', titleKo: '오늘도 파이팅', titleEn: 'One More Cheer Today', hookPhrase: '오늘도 파이팅, 두 손을 높이 마주쳐', scene: '출발 직전 원을 만든 친구들이 운동장 한가운데서 손을 포갠 모습' },
+      { id: 'heart-runs-on', titleKo: '끝까지 뛰는 마음', titleEn: 'A Heart That Runs On', hookPhrase: '끝까지 뛰는 마음, 숨이 차도 서로를 불러', scene: '노을 진 마지막 직선 주로를 나란히 달리는 네 사람' },
+      { id: 'roar-we-made', titleKo: '우리가 만든 함성', titleEn: 'The Roar We Make', hookPhrase: '우리가 만든 함성, 닫힌 지붕까지 울려 퍼져', scene: '휴대전화 불빛과 깃발이 물결치는 실내 경기장 스탠드' },
+    ],
+    lineBank: {
+      intro: ['출발선의 흰 줄 위로 운동화 앞코를 맞춰', '관중석의 손뼉이 심장 박자처럼 번져 와'],
+      verse1: ['새벽 운동장 출발선에 두 발을 나란히 놓고', '풀린 신발끈을 단단한 매듭으로 다시 묶어', '넘어져 묻은 무릎의 흙을 손바닥으로 털며', '친구들이 부르는 내 이름 쪽으로 고개를 든다'],
+      verse2: ['호각이 울리자 우리는 같은 방향으로 뛰어', '가파른 코너마다 서로의 등을 밀어 주고', '한 사람이 넘어지면 모두가 걸음을 늦춰', '다시 선 발끝에 더 큰 함성을 모아 주며', '마지막 깃발까지 나란히 팔을 흔들어 간다'],
+      chorus: ['시작을 알리는 소리가 가슴 깊이 울려', '작은 한 걸음이 오늘의 거리를 바꿔', '넘어진 자리에서 더 단단히 땅을 딛어', '친구의 목소리가 두 다리에 힘을 보태', '우리의 함성이 높은 관중석까지 번져', '앞을 향한 두 눈에 새로운 길이 열려', '혼자보다 함께라서 더 멀리 뛸 수 있어', '숨이 차오를수록 박수는 더 커져 가', '마지막 선 너머에도 다음 출발이 기다려'],
+      chant: ['하나 둘 셋, 앞으로', '힘내 힘내, 같이 가', '파이팅, 이름을 외쳐', '할 수 있어, 다시 일어나', '손을 높이, 함성 크게', '우리 함께, 끝까지 가'],
+      bridge: ['넘어지지 않는 사람이 강한 게 아니라', '손을 내밀고 다시 서는 우리가 강해서', '관중석에서 들려온 수많은 이름들이', '혼자였던 도전을 우리의 길로 바꿔 놓는다'],
+      buildUp: [
+        '맞잡은 손의 박자를 하나 둘 더 크게 맞춰',
+        '앞으로 한 걸음',
+        '관중석의 이름들이 북소리 위로 번져',
+        '더 크게 외쳐',
+        '우리의 발끝과 함성을 출발선에 모아',
+        '지금 함께 뛰어',
+      ],
+      bridgeResolution: '{titleKo}, 함께 외치며 다음 도전의 첫발을 힘차게 내디뎌',
+      outro: ['결승선 곁에서 묶은 신발끈을 천천히 풀고', '서로의 어깨를 두드리며 다음 시작을 약속한다'],
+    },
+  }),
+  palette({
+    id: 'everyday-happiness',
+    nameKo: '일상의 행복',
+    nameEn: 'Everyday Happiness / Joy',
+    aliasesKo: ['행복한 음악', '행복한음악', '행복한 노래', '행복', '기쁨', '좋은 날', '즐거움', '소확행', '작은 축제'],
+    aliasesEn: ['happiness', 'happy music', 'happy song', 'joy', 'joyful music', 'good day', 'everyday happiness', 'small celebration'],
+    emotionalArc: '아침 햇살과 갓 구운 빵 냄새를 알아차린 기쁨이 손뼉과 친구들의 웃음으로 번져 평범한 하루 자체가 작은 축제가 되는 흐름',
+    koreanKeywords: ['식탁 위 햇살', '갓 구운 빵', '손뼉 소리', '친구들의 웃음', '창가의 레몬에이드'],
+    moodKeywords: ['햇살 같은 기쁨', '가벼운 들뜸', '함께 웃는 행복'],
+    englishProductionCue: 'bright acoustic-pop polish with handclaps, buoyant bass, sunlit guitars, and a communal singalong lift',
+    compatiblePresetIdsByLane: {
+      emotional: ['acoustic-indie-funk', 'warm-acoustic-folk', 'city-pop', 'airy-indie-pop', 'midnight-jazz-swing'],
+      energetic: ['festival-dance-pop', 'analog-nu-disco', 'modern-electro-pop', 'modern-korean-trot', 'two-step-uk-garage'],
+    },
+    englishProductionCueByLane: {
+      emotional: 'sunlit organic pop with acoustic sparkle, easy handclaps, smiling vocals, and present-tense warmth',
+      energetic: 'celebratory pop motion with buoyant bass, bright handclaps, colorful hooks, and communal singalong joy',
+    },
+    blockedMoodTerms: ['aggressive', 'hype', 'rebellious', 'defiant', 'raw', 'heartbroken', 'tearful', 'melancholic', 'rainy', 'dark', 'restless'],
+    variants: [
+      { id: 'spoonful-of-sunlight', titleKo: '햇살 한 스푼', titleEn: 'A Spoonful of Sunlight', hookPhrase: '햇살 한 스푼, 오늘의 커피 위에 살짝 얹어', scene: '아침 식탁의 흰 머그잔과 잼 병 사이로 길게 들어온 햇살' },
+      { id: 'fresh-baked-morning', titleKo: '갓 구운 아침', titleEn: 'Fresh-Baked Morning', hookPhrase: '갓 구운 아침, 빵 냄새 따라 웃음이 깨어나', scene: '동네 빵집 유리문 안쪽에 놓인 따뜻한 식빵과 김 서린 창' },
+      { id: 'clapping-afternoon', titleKo: '박수 치는 오후', titleEn: 'An Afternoon That Claps', hookPhrase: '박수 치는 오후, 손바닥마다 리듬이 피어나', scene: '공원 돗자리 위에서 박자에 맞춰 손뼉 치는 친구들' },
+      { id: 'today-is-good', titleKo: '오늘은 좋은 날', titleEn: 'Today Is a Good Day', hookPhrase: '오늘은 좋은 날, 열린 창마다 노래가 번져', scene: '파란 커튼이 흔들리는 창문과 맑게 갠 동네 지붕들' },
+      { id: 'laughter-at-the-table', titleKo: '웃음이 번진 식탁', titleEn: 'Laughter Around the Table', hookPhrase: '웃음이 번진 식탁, 작은 접시까지 축제가 돼', scene: '색색의 과일 접시와 레몬에이드가 놓인 긴 나무 식탁' },
+      { id: 'pocket-sized-festival', titleKo: '주머니 속 축제', titleEn: 'Pocket-Sized Celebration', hookPhrase: '주머니 속 축제, 동전처럼 반짝이는 기쁨을 꺼내', scene: '종이 꽃가루와 작은 사탕이 가득 든 청재킷 주머니' },
+      { id: 'open-window-saturday', titleKo: '창문을 연 토요일', titleEn: 'Open-Window Saturday', hookPhrase: '창문을 연 토요일, 바람과 함께 춤을 시작해', scene: '빨래가 흔들리는 베란다와 활짝 열린 토요일 아침 창문' },
+      { id: 'neighborhood-dance', titleKo: '우리 동네 춤', titleEn: 'Our Neighborhood Dance', hookPhrase: '우리 동네 춤, 골목 모퉁이까지 발을 맞춰', scene: '분필 그림이 가득한 골목에서 스피커를 둘러싸고 춤추는 이웃들' },
+    ],
+    lineBank: {
+      intro: ['식탁 위 햇살이 노란 잼 병을 반짝이게 해', '동네 빵집 문이 열리자 고소한 아침이 번져'],
+      verse1: ['창문을 활짝 열고 맑은 바람을 먼저 들여', '갓 구운 식빵 위에 딸기잼을 둥글게 바르고', '라디오 첫 노래에 슬리퍼 발끝을 맞추며', '머그잔 그림자 옆에 작은 미소를 내려놓는다'],
+      verse2: ['나는 과일과 레몬에이드를 바구니에 담고', '친구들이 기다리는 공원 돗자리로 달려가', '종이컵을 부딪치며 오늘의 안부를 나눠', '누군가 친 박수에 모두 같은 박자를 얹고', '노을이 올 때까지 잔디 위에서 웃음을 이어 간다'],
+      chorus: ['평범한 오늘이 이미 눈부시게 반짝여', '바삭한 빵 소리도 근사한 리듬이 돼', '창문을 지난 햇살이 두 볼 위에서 춤춰', '마주친 웃음마다 작은 축제가 열려', '손뼉을 한 번 치면 골목까지 노래해', '달콤한 과일 향이 바람을 따라 번져', '함께 있는 식탁은 무엇보다 풍성해', '좋아하는 순간을 지금 크게 불러 봐', '집으로 가는 길에도 기쁨이 콧노래가 돼'],
+      chant: ['손뼉 쳐, 짝짝', '웃어 봐, 하하', '햇살 아래, 빙글빙글', '좋은 날, 같이 노래해', '하나 둘 셋, 작은 축제', '우리 모두, 기분 좋게'],
+      bridge: ['특별한 초대장도 화려한 촛불도 없지만', '빵을 나누고 눈을 맞춘 이 순간을 보니', '행복은 멀리서 찾아오는 손님이 아니라', '이미 우리 식탁에 앉아 함께 웃고 있었어'],
+      buildUp: [
+        '손뼉 위에 햇살 한 줌 반짝이게 포개',
+        '짝짝 더 환하게',
+        '빵 냄새와 웃음소리 같은 박자에 모여',
+        '빙글 함께 춤춰',
+        '친구들의 목소리가 골목 끝까지 번져',
+        '지금 이 축제',
+      ],
+      bridgeResolution: '{titleKo}, 웃음이 번진 바로 이 순간을 함께 오래 노래해',
+      outro: ['빈 접시를 포개며 남은 노래를 낮게 흥얼거려', '주머니에 든 햇살 한 조각과 집으로 걸어간다'],
     },
   }),
   palette({
@@ -318,21 +480,35 @@ function aliasScore(normalizedTheme, alias, allowAttachedKoreanMatch = false) {
 }
 
 const LANE_PALETTE_PREFERENCES = {
-  // Lower numbers mean a stronger lane identity. This stops a pair of travel
-  // synonyms from drowning out an explicit emotional word such as "이별".
+  // Lower numbers mean a stronger lane identity. Dedicated quick-mode words
+  // take intentional ownership in a three-way compound, while shifted legacy
+  // tiers preserve their previous ordering and semantic regressions.
   emotional: new Map([
-    ['love-separation', 0],
-    ['healing-growth', 0],
-    ['season-nostalgia', 0],
-    ['dawn-night', 0],
-    ['dream-cosmos', 1],
-    ['ocean-travel', 1],
+    ['comfort-embrace', 0],
+    ['love-separation', 1],
+    ['healing-growth', 1],
+    ['season-nostalgia', 1],
+    ['dawn-night', 1],
+    ['encouragement-forward', 1],
+    ['everyday-happiness', 1],
+    ['dream-cosmos', 2],
+    ['ocean-travel', 2],
   ]),
   energetic: new Map([
-    ['drive-freedom', 0],
-    ['city-neon', 0],
-    ['dream-cosmos', 1],
-    ['ocean-travel', 1],
+    ['encouragement-forward', 0],
+    ['drive-freedom', 1],
+    ['city-neon', 1],
+    ['comfort-embrace', 1],
+    ['everyday-happiness', 1],
+    ['dream-cosmos', 2],
+    ['ocean-travel', 2],
+  ]),
+  // Balanced matching otherwise remains score-led. These three explicit modes
+  // alone need a deterministic preference when all are present together.
+  balanced: new Map([
+    ['everyday-happiness', 0],
+    ['comfort-embrace', 1],
+    ['encouragement-forward', 1],
   ]),
 };
 
@@ -428,8 +604,9 @@ export function buildTrackConcept({
   seed = 20240101,
   ordinal = 0,
   lane = 'balanced',
+  resolvedPalette = null,
 } = {}) {
-  const selectedPalette = matchThemePalette(theme, seed, lane);
+  const selectedPalette = resolvedPalette || matchThemePalette(theme, seed, lane);
   const rng = createNamedRng(seed, 'concept-title', selectedPalette.id);
   const offset = Math.floor(rng() * selectedPalette.variants.length);
   const variantIndex = (offset + Math.max(0, Math.trunc(ordinal))) % selectedPalette.variants.length;
@@ -452,7 +629,8 @@ export function buildTrackConcept({
     emotionalArc: selectedPalette.emotionalArc,
     koreanKeywords: [...selectedPalette.koreanKeywords],
     moodKeywords: [...selectedPalette.moodKeywords],
-    englishProductionCue: selectedPalette.englishProductionCue,
+    englishProductionCue: selectedPalette.englishProductionCueByLane?.[lane]
+      || selectedPalette.englishProductionCue,
     userThemeCue,
   };
 }
