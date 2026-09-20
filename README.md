@@ -66,6 +66,14 @@ Mood는 Suno v6의 독립 입력란에 맞게 Style과 분리하며, 프리셋�
 - Key Change는 최대 한 번, 반드시 Final Chorus 바로 앞에만 둡니다.
 - Intro는 짧은 cold open, Outro는 차분한 해결이며 마지막 `[End]` 또는 `[Fade Out]`은 구조 그대로 유지합니다.
 
+## 섹션별 무드·퍼포먼스 디렉션
+
+각 곡의 렌더링된 Lyrics에는 canonical 섹션 헤더를 그대로 보존하면서, 실제 선택된 장르 프리셋·악기·보컬 성별과 delivery·BPM·Key·콘셉트 감정선·구조 역할에서 파생한 간결한 영문 프로덕션 cue가 괄호로 표시됩니다. Intro, Verse 전환, Chorus/Drop의 훅 질감, 무가사 Solo/Instrumental, Key Change, Outro, End/Fade Out까지 섹션별로 1–3개의 구조화된 cue를 사용하며, 프리셋에 없는 악기나 Style 문자열을 역으로 추측하지 않습니다.
+
+새로 생성하는 디렉션은 한 괄호에 편곡·퍼포먼스·전환·종결 중 한 가지 관심사만 담고 실제 악기는 최대 두 개만 언급합니다. 헤더 descriptor는 90자, 본편 cue는 135자, Shorts용 cue 원문은 105자 이하이며, 문장을 기계적으로 잘라 맞추지 않고 제한 안에 들어오는 완결된 짧은 표현을 선택합니다. 훅 cue는 첫 제시·반복·최종 정점의 occurrence 차이를 유지합니다.
+
+원본 `lyricSections[].section` 순서와 값은 바뀌지 않고, `lyricSections[].lines`에는 실제 한글 가사만 남습니다. 따라서 부모 곡에서 정확히 복사하는 Shorts excerpt와 YouTube 가사 하이라이트는 cue 없이 깨끗하며, Copy Lyrics·Copy All·JSON·CSV·Markdown의 전체 Lyrics에는 렌더링된 디렉션이 함께 포함됩니다.
+
 ## 15개 canonical 구조
 
 `assets/js/structureProfiles.js`의 순서와 태그는 제품 계약입니다.
@@ -120,6 +128,8 @@ Mood는 Suno v6의 독립 입력란에 맞게 Style과 분리하며, 프리셋�
 브라우저 저장 키는 이전과 동일한 **`sunoflow.plan.v1`**입니다. `assets/js/planSchema.js`가 다음 경계를 담당합니다.
 
 - 버전이 없거나 `schemaVersion: 1`인 기존 플랜은 legacy로 불러옵니다.
+- 기존 cue-less schema-v2 플랜은 16개 트랙이 모두 cue-less일 때 그대로 허용하며, 디렉션이 있는 v2 플랜은 Full/Shorts 16개 전체가 enriched여야 합니다.
+- enriched 플랜은 렌더러가 출력하는 보컬·퍼포먼스 태그를 성별과 구조 프로필의 canonical 값으로 검증하고, Shorts `lyricsGuide`를 `strongestHookTag`와 렌더링된 Lyrics에서 파생한 정확한 호환 형식으로 검증합니다.
 - legacy의 영어 `lyricsGuide`를 v2 한글 가사로 조용히 위조하지 않으며 카드에 명확히 표시합니다.
 - UI는 `lyrics ?? lyricsGuide`를 사용합니다.
 - 손상된 구조와 지원 버전보다 미래인 schema는 렌더링 전에 안전하게 거부합니다.
@@ -174,6 +184,7 @@ assets/
     lyricsEngine.js        # 구조형 완성 가사와 Shorts excerpt
     planSchema.js          # v1 legacy / v2 / future schema boundary
     promptEngine.js        # 월간 package orchestration
+    sectionMoodEngine.js   # 프리셋/구조 기반 섹션 cue, 안전한 렌더링과 검증
     schedule.js            # 4주 릴리스 날짜
     seededRandom.js        # stable hash + named PRNG streams
     storage.js             # sunoflow.plan.v1 localStorage

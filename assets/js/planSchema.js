@@ -4,6 +4,14 @@
 // malformed and future schemas are rejected before reaching the renderer.
 
 import { STRUCTURE_BY_ID } from './structureProfiles.js';
+import {
+  hasDirectionSyntaxInjection,
+  inheritCueForShort,
+  inspectLyricSectionDirections,
+  normalizeLyricSectionDirections,
+  renderLyrics,
+  shortEndCue,
+} from './sectionMoodEngine.js';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 export const LEGACY_SCHEMA_VERSION = 1;
@@ -23,6 +31,25 @@ function isString(value, { nonempty = false } = {}) {
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeLineEndings(value) {
+  return String(value).replace(/\r\n?/g, '\n');
+}
+
+function normalizeV2DirectionMetadata(plan) {
+  if (plan.tracks.some((track) =>
+    hasDirectionSyntaxInjection(track?.lyricSections))) return null;
+  return {
+    ...plan,
+    tracks: plan.tracks.map((track) => {
+      if (!isRecord(track)) return track;
+      return {
+        ...track,
+        lyricSections: normalizeLyricSectionDirections(track.lyricSections),
+      };
+    }),
+  };
 }
 
 function hasLegacyTrackShape(track) {
@@ -67,8 +94,61 @@ function hasLyricSectionsShape(sections) {
       && section.lines.every((line) => isString(line, { nonempty: true })));
 }
 
+function expectedVocalTag(vocalGender) {
+  if (vocalGender === 'Male') return '[Male singer]';
+  if (vocalGender === 'Duet') return '[Female and Male duet]';
+  return '[Female singer]';
+}
+
+/**
+ * Enriched sheets render these tags as directives, so accept only the exact
+ * values produced by lyricsEngine. Cue-less v2 plans retain their legacy path.
+ */
+function hasCanonicalRenderedTags(track) {
+  const sections = track.lyricSections;
+  const singerTag = expectedVocalTag(track.vocalGender);
+  if (!sections.every((section) =>
+    section.vocalTag === (section.isVocal ? singerTag : null))) return false;
+
+  if (track.type === 'shorts') {
+    return sections.every((section) => section.performanceTag === null);
+  }
+
+  const profile = STRUCTURE_BY_ID[track.structureId];
+  const contrast = profile?.rules?.vocalContrast;
+  if (!contrast) {
+    return sections.every((section) => section.performanceTag === null);
+  }
+
+  const firstVocalIndex = sections.findIndex((section) => section.isVocal);
+  let strongestHookIndex = -1;
+  sections.forEach((section, index) => {
+    if (section.section === profile.strongestHookTag) strongestHookIndex = index;
+  });
+  if (firstVocalIndex < 0
+    || strongestHookIndex < 0
+    || firstVocalIndex === strongestHookIndex) return false;
+
+  return sections.every((section, index) => {
+    if (!section.isVocal) return section.performanceTag === null;
+    if (index === firstVocalIndex) return section.performanceTag === contrast.soft;
+    if (index === strongestHookIndex) return section.performanceTag === contrast.peak;
+    return section.performanceTag === null;
+  });
+}
+
+function expectedEnrichedLyricsGuide(track, renderedLyrics) {
+  if (track.type === 'main') return renderedLyrics;
+  const sourceSection = track.lyricSections[0]?.section;
+  if (!isString(track.strongestHookTag, { nonempty: true })
+    || track.strongestHookTag !== sourceSection) return null;
+  return `15-30s exact excerpt from parent ${track.strongestHookTag}:\n${renderedLyrics}`;
+}
+
 function hasV2TrackShape(track) {
   if (!hasLegacyTrackShape(track)) return false;
+  const directionInspection = inspectLyricSectionDirections(track.lyricSections);
+  if (!directionInspection.valid) return false;
   if (!VALID_DAYS.has(track.day)
     || !VALID_STATUSES.has(track.status)
     || !Number.isInteger(track.week)
@@ -105,6 +185,17 @@ function hasV2TrackShape(track) {
     || !track.lyricSections.every((section, index) => section.section === track.structure[index])
     || !hasConceptShape(track.concept, track)) return false;
 
+  if (directionInspection.enriched) {
+    if (!hasCanonicalRenderedTags(track)) return false;
+    const renderedLyrics = renderLyrics(track.lyricSections);
+    const expectedLyricsGuide = expectedEnrichedLyricsGuide(track, renderedLyrics);
+    if (expectedLyricsGuide == null
+      || normalizeLineEndings(track.lyrics) !== renderedLyrics
+      || normalizeLineEndings(track.lyricsGuide) !== expectedLyricsGuide) {
+      return false;
+    }
+  }
+
   if (track.type === 'main') {
     const canonicalSections = STRUCTURE_BY_ID[track.structureId].sections;
     return track.linkedTrackId == null
@@ -112,7 +203,17 @@ function hasV2TrackShape(track) {
       && track.structure.every((section, index) => section === canonicalSections[index]);
   }
 
+  const sourceSection = track.lyricSections[0];
+  const endSection = track.lyricSections[1];
   return isString(track.linkedTrackId, { nonempty: true })
+    && track.structure.length === 2
+    && track.lyricSections.length === 2
+    && track.structure[0] === track.shortsHookGuide?.sourceSection
+    && track.structure[1] === 'End'
+    && sourceSection?.section === track.shortsHookGuide?.sourceSection
+    && endSection?.section === 'End'
+    && Array.isArray(endSection?.lines)
+    && endSection.lines.length === 0
     && isRecord(track.shortsHookGuide)
     && isString(track.shortsHookGuide.excerpt, { nonempty: true })
     && track.shortsHookGuide.excerpt.includes(track.titleKo)
@@ -120,6 +221,10 @@ function hasV2TrackShape(track) {
     && track.shortsHookGuide.excerptLines.length >= 2
     && track.shortsHookGuide.excerptLines.length <= 4
     && track.shortsHookGuide.excerptLines.every((line) => isString(line, { nonempty: true }))
+    && sourceSection.lines.length === track.shortsHookGuide.excerptLines.length
+    && sourceSection.lines.every(
+      (line, index) => line === track.shortsHookGuide.excerptLines[index],
+    )
     && isString(track.shortsHookGuide.sourceSection, { nonempty: true })
     && isString(track.shortsHookGuide.highlightSection, { nonempty: true })
     && isString(track.shortsHookGuide.videoHookIdea, { nonempty: true })
@@ -152,10 +257,32 @@ function nextCalendarDay(parentDate, shortDate) {
     && shortTime - parentTime === 24 * 60 * 60 * 1000;
 }
 
+function sameCue(left, right) {
+  const fields = ['kind', 'placement', 'text', 'afterLine', 'inheritToShorts', 'shortText'];
+  return fields.every((field) =>
+    Object.prototype.hasOwnProperty.call(left, field)
+      === Object.prototype.hasOwnProperty.call(right, field)
+    && left[field] === right[field]);
+}
+
+function sameCueList(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && left.every((cue, index) => sameCue(cue, right[index]));
+}
+
 function validateV2Relationships(plan) {
   if (plan.tracks.length !== 16) return false;
   const ids = new Set(plan.tracks.map((track) => track.id));
   if (ids.size !== plan.tracks.length) return false;
+
+  const directionStates = plan.tracks.map((track) =>
+    inspectLyricSectionDirections(track.lyricSections));
+  const planIsEnriched = directionStates[0]?.enriched;
+  if (!directionStates.every((state) =>
+    state.valid && state.enriched === planIsEnriched)) return false;
+
   const mains = plan.tracks.filter((track) => track.type === 'main');
   const shorts = plan.tracks.filter((track) => track.type === 'shorts');
   if (mains.length !== 8 || shorts.length !== 8) return false;
@@ -198,16 +325,46 @@ function validateV2Relationships(plan) {
       || parent.concept.variantId !== short.concept.variantId) return false;
 
     const source = strongestHookSection(parent);
+    if (!source) return false;
     const guide = short.shortsHookGuide;
     const excerptLines = guide.excerptLines;
     const normalizedExcerpt = String(guide.excerpt).replace(/\r\n?|\n/g, '\n').trim();
     const exactExcerpt = excerptLines.join('\n').trim();
+    const parentDirectionState = inspectLyricSectionDirections(parent.lyricSections);
+    const shortDirectionState = inspectLyricSectionDirections(short.lyricSections);
+    if (parentDirectionState.enriched !== shortDirectionState.enriched) return false;
+
+    let directionProjectionMatches = true;
+    if (parentDirectionState.enriched) {
+      const shortSource = short.lyricSections[0];
+      const shortEnd = short.lyricSections[1];
+      const expectedHeader = source.shortHeaderDescriptor || source.headerDescriptor;
+      const hasExpectedHeader = typeof expectedHeader === 'string';
+      const hasActualHeader = Object.prototype.hasOwnProperty.call(
+        shortSource,
+        'headerDescriptor',
+      );
+      const expectedCues = source.cues
+        .filter((cue) => cue.inheritToShorts === true && cue.placement === 'before-lines')
+        .slice(0, 2)
+        .map(inheritCueForShort);
+      directionProjectionMatches = hasExpectedHeader === hasActualHeader
+        && (!hasExpectedHeader || shortSource.headerDescriptor === expectedHeader)
+        && !Object.prototype.hasOwnProperty.call(shortSource, 'shortHeaderDescriptor')
+        && sameCueList(shortSource.cues, expectedCues)
+        && sameCueList(shortEnd.cues, [shortEndCue()]);
+    }
+
     return Boolean(source)
       && source.section === guide.sourceSection
       && isConsecutiveSlice(source.lines, excerptLines)
+      && short.lyricSections[0].lines.length === excerptLines.length
+      && short.lyricSections[0].lines.every(
+        (line, index) => line === excerptLines[index],
+      )
       && normalizedExcerpt === exactExcerpt
       && excerptLines.some((line) => line.includes(parent.titleKo))
-      && excerptLines.every((line) => short.lyrics.includes(line));
+      && directionProjectionMatches;
   });
 }
 
@@ -242,17 +399,19 @@ export function inspectPlanSchema(input) {
     };
   }
 
-  if (!isString(input.engineVersion, { nonempty: true })
-    || !isString(input.id, { nonempty: true })
-    || !isString(input.theme)
-    || !isFiniteNumber(input.seed)
-    || !isString(input.startDate, { nonempty: true })
-    || !input.tracks.every(hasV2TrackShape)
-    || !validateV2Relationships(input)) {
+  const normalizedInput = normalizeV2DirectionMetadata(input);
+  if (!normalizedInput
+    || !isString(normalizedInput.engineVersion, { nonempty: true })
+    || !isString(normalizedInput.id, { nonempty: true })
+    || !isString(normalizedInput.theme)
+    || !isFiniteNumber(normalizedInput.seed)
+    || !isString(normalizedInput.startDate, { nonempty: true })
+    || !normalizedInput.tracks.every(hasV2TrackShape)
+    || !validateV2Relationships(normalizedInput)) {
     return { plan: null, error: 'malformed-v2-plan', legacy: false };
   }
 
-  return { plan: input, error: null, legacy: false };
+  return { plan: normalizedInput, error: null, legacy: false };
 }
 
 export function normalizePlan(input) {

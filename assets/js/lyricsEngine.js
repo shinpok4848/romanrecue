@@ -4,16 +4,15 @@
 // caller; authored line banks keep the result narrative rather than word salad.
 
 import { getConceptLineBank } from './conceptPalettes.js';
+import {
+  enrichLyricSections,
+  inheritCueForShort,
+  isNonVocalSection,
+  renderLyrics,
+  shortEndCue,
+} from './sectionMoodEngine.js';
 
-const NON_VOCAL = new Set([
-  'Interlude',
-  'Instrumental',
-  'Solo',
-  'Guitar Solo',
-  'Key Change',
-  'End',
-  'Fade Out',
-]);
+export { renderLyrics } from './sectionMoodEngine.js';
 
 const PRE_CHORUS_LINES = [
   '아직 다 말하지 않은 마음을 한 박자 뒤에 두고',
@@ -90,23 +89,22 @@ function hookPhraseFor(concept) {
   return `${concept.titleKo}, 오늘의 마음을 밝혀`;
 }
 
-/** Render structured lyric sections without ever interpreting text as markup. */
-export function renderLyrics(lyricSections) {
-  const blocks = lyricSections.map((item) => {
-    const lines = [`[${item.section}]`];
-    if (item.vocalTag) lines.push(item.vocalTag);
-    if (item.performanceTag) lines.push(`[${item.performanceTag}]`);
-    lines.push(...item.lines);
-    return lines.join('\n');
-  });
-  return blocks.join('\n\n');
-}
-
 /**
  * Generate full Korean lyrics in the profile's exact section sequence.
- * @param {{profile:object, concept:object, vocalGender:string, rng:()=>number}} input
+ * @param {{profile:object, concept:object, preset:object, bpm:number, key:string,
+ * vocalPhrase:string, vocalGender:string, lane:string, rng:()=>number}} input
  */
-export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
+export function buildFullLyrics({
+  profile,
+  concept,
+  preset,
+  bpm,
+  key,
+  vocalPhrase,
+  vocalGender,
+  lane,
+  rng,
+}) {
   const bank = getConceptLineBank(concept.paletteId);
   const singerTag = singerTagForGender(vocalGender);
   const hookPhrase = hookPhraseFor(concept);
@@ -139,7 +137,7 @@ export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
 
   const lyricSections = sections.map((section, index) => {
     const occurrence = sections.slice(0, index + 1).filter((value) => value === section).length;
-    const isNonVocal = NON_VOCAL.has(section);
+    const isNonVocal = isNonVocalSection(section);
     const result = {
       section,
       occurrence,
@@ -224,10 +222,21 @@ export function buildFullLyrics({ profile, concept, vocalGender, rng }) {
     }
   }
 
+  const directedSections = enrichLyricSections(lyricSections, {
+    preset,
+    bpm,
+    key,
+    vocalPhrase,
+    vocalGender,
+    lane,
+    profile,
+    concept,
+  });
+
   return {
-    lyricSections,
-    lyrics: renderLyrics(lyricSections),
-    strongestHookSection: lyricSections[strongestIndex] || null,
+    lyricSections: directedSections,
+    lyrics: renderLyrics(directedSections),
+    strongestHookSection: directedSections[strongestIndex] || null,
   };
 }
 
@@ -258,25 +267,48 @@ export function extractStrongestHook(track) {
   };
 }
 
-/** Build clean Shorts lyrics directly from the parent's strongest hook. */
+/** Build structured Shorts lyrics directly from the parent's strongest hook. */
 export function buildShortLyrics(parent) {
+  const source = findStrongestHookSection(parent);
   const { sourceSection, excerptLines, excerpt } = extractStrongestHook(parent);
   const vocalTag = singerTagForGender(parent.vocalGender);
-  const lyrics = [
-    `[${sourceSection}]`,
+  const inheritedCues = (source?.cues || [])
+    .filter((cue) => cue.inheritToShorts === true && cue.placement === 'before-lines')
+    .slice(0, 2)
+    .map(inheritCueForShort);
+  const sourceLyricSection = {
+    section: sourceSection,
+    occurrence: 1,
+    isVocal: true,
     vocalTag,
-    ...excerptLines,
-    '',
-    '[End]',
-  ].join('\n');
+    performanceTag: null,
+    energy: 'immediate hook peak',
+    arrangement: '2-4 consecutive lines copied exactly from parent',
+    isStrongestHook: true,
+    lines: [...excerptLines],
+    ...(source?.shortHeaderDescriptor || source?.headerDescriptor
+      ? { headerDescriptor: source.shortHeaderDescriptor || source.headerDescriptor }
+      : {}),
+    cues: inheritedCues,
+  };
+  const endLyricSection = {
+    section: 'End',
+    occurrence: 1,
+    isVocal: false,
+    vocalTag: null,
+    performanceTag: null,
+    energy: 'clean ending',
+    arrangement: 'explicit short-form termination',
+    isStrongestHook: false,
+    lines: [],
+    cues: [shortEndCue()],
+  };
+  const lyricSections = [sourceLyricSection, endLyricSection];
   return {
     sourceSection,
     excerptLines,
     excerpt,
-    lyrics,
-    lyricSections: [
-      { section: sourceSection, occurrence: 1, isVocal: true, vocalTag, performanceTag: null, energy: 'immediate hook peak', arrangement: '2-4 consecutive lines copied exactly from parent', isStrongestHook: true, lines: [...excerptLines] },
-      { section: 'End', occurrence: 1, isVocal: false, vocalTag: null, performanceTag: null, energy: 'clean ending', arrangement: 'explicit short-form termination', isStrongestHook: false, lines: [] },
-    ],
+    lyrics: renderLyrics(lyricSections),
+    lyricSections,
   };
 }
